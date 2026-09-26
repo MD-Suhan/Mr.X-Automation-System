@@ -1,0 +1,7 @@
+{
+  "name": "AutoResell AI - Autonomous Marketing Engine",
+  "description": "Cloud-based autonomous AI reseller marketing platform for Badhons World / Mayons BD, integrating trend discovery, direct website product media scraping, AI promotional poster and caption generation, buffer stock management, quality gating, and Facebook/Instagram automated publishing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
