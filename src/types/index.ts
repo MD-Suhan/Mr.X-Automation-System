@@ -32,6 +32,7 @@ export interface SupplierProduct {
   category: string;
   url: string;
   sku: string;
+  price?: number;
   stockStatus: StockStatus;
   stockQuantity: number;
   rating: number;
@@ -134,6 +135,7 @@ export interface PipelineItem {
   productName: string;
   category: string;
   productUrl: string;
+  price?: number;
   supplier: string;
   trendId: string;
   trendTitle: string;
@@ -192,6 +194,7 @@ export interface PostingRules {
   metaFacebookPageName: string;
   metaInstagramHandle: string;
   metaConnected: boolean;
+  peakHoursSlots?: string[];
 }
 
 export interface SystemLog {

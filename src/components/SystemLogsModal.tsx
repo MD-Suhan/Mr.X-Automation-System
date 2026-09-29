@@ -44,23 +44,23 @@ export const SystemLogsModal: React.FC<SystemLogsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-      <div className="bg-slate-950 text-slate-100 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-800 font-mono text-xs">
-        {/* Terminal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-6">
+      <div className="bg-slate-950 text-slate-100 rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[96vh] sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-800 font-mono text-xs">
+        {/* Terminal Header - Sticky top with guaranteed close button */}
+        <div className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-slate-800 bg-slate-900">
+          <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+            <div className="hidden sm:flex items-center gap-1.5 shrink-0">
               <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
               <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
               <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
             </div>
-            <div className="flex items-center gap-2 ml-2">
-              <Terminal className="w-4 h-4 text-blue-400" />
-              <span className="font-bold text-slate-200">AutoResell AI Orchestration Logs</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <Terminal className="w-4 h-4 text-blue-400 shrink-0" />
+              <span className="font-bold text-slate-200 truncate text-[11px] sm:text-xs">Orchestration Logs</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
@@ -78,9 +78,10 @@ export const SystemLogsModal: React.FC<SystemLogsModalProps> = ({
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+              className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors ml-1"
+              aria-label="Close logs"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 text-white" />
             </button>
           </div>
         </div>

@@ -77,46 +77,47 @@ export const PipelineFlow: React.FC<PipelineFlowProps> = ({ items, onSelectItem 
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs mb-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+    <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs mb-4 sm:mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-slate-100 gap-2">
         <div>
-          <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-            Autonomous Marketing Execution Pipeline
+          <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
+            Autonomous Marketing Execution Pipeline (7-Step Workflow)
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-[11px] sm:text-xs text-slate-500">
             Real-time multi-agent workflow: Trend detection to Facebook & Instagram publication
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span>Supplier: Badhons World / Mayons BD</span>
+        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500">
+          <span className="truncate">Supplier: Badhons World / Mayons BD</span>
           <span aria-hidden="true">·</span>
-          <span>Zero Login Required</span>
+          <span className="text-emerald-600 font-semibold shrink-0">Zero Login</span>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        {steps.map((step, idx) => {
+      {/* Responsive Horizontal Scroll on Mobile, Grid on Desktop */}
+      <div className="mt-3 flex overflow-x-auto no-scrollbar snap-x gap-2.5 sm:grid sm:grid-cols-4 lg:grid-cols-7 pb-1">
+        {steps.map((step) => {
           const Icon = step.icon;
           return (
             <div
               key={step.num}
-              className="relative p-3 rounded-lg bg-slate-50/70 border border-slate-100 hover:border-slate-300 transition-colors"
+              className="w-36 sm:w-auto shrink-0 snap-start relative p-2.5 sm:p-3 rounded-lg bg-slate-50/80 border border-slate-200 hover:border-blue-300 transition-colors"
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-mono font-semibold text-slate-400">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-400">
                   {step.num}
                 </span>
-                <span className="text-xs font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-xs">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-xs">
                   {step.count}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 mb-1">
                 <Icon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <h3 className="text-xs font-semibold text-slate-900 truncate">
+                <h3 className="text-[11px] sm:text-xs font-bold text-slate-900 truncate">
                   {step.title}
                 </h3>
               </div>
-              <p className="text-[11px] text-slate-500 leading-tight">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 leading-snug line-clamp-2">
                 {step.description}
               </p>
             </div>

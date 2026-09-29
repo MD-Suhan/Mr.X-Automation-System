@@ -17,12 +17,16 @@ interface CatalogueViewProps {
   products: SupplierProduct[];
   onRunProductPipeline: (productId: string) => void;
   isRunningPipeline: boolean;
+  onSyncBadhons?: () => void;
+  isSyncing?: boolean;
 }
 
 export const CatalogueView: React.FC<CatalogueViewProps> = ({
   products,
   onRunProductPipeline,
   isRunningPipeline,
+  onSyncBadhons,
+  isSyncing = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
@@ -51,22 +55,41 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header and Filter Controls */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-              Badhons World Public Catalogue & Stock Verification
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+                Badhons World (badhonsworld.com) লাইভ সাপ্লায়ার ক্যাটালগ
+              </h2>
+              <a
+                href="https://badhonsworld.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-0.5"
+              >
+                <span>ভিজিট করুন</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
             <p className="text-xs text-slate-500">
-              Live crawler verifying public stock availability and product specifications (Mayons BD Reseller System)
+              সরাসরি বাদহনস ওয়ার্ল্ড-এর লাইভ স্টক এবং ক্লাউডফ্রন্ট ইমেজ সার্ভার থেকে সিঙ্ক করা হয়
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="font-semibold text-slate-700">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
               {products.filter((p) => p.stockStatus === 'in_stock').length} In Stock
             </span>
-            <span>·</span>
-            <span>Zero Login Required</span>
+            {onSyncBadhons && (
+              <button
+                onClick={onSyncBadhons}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors shrink-0"
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'সিঙ্ক হচ্ছে...' : 'badhonsworld.com সিঙ্ক করুন'}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -85,10 +108,10 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           </div>
 
           {/* Stock status filter */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs font-medium w-full sm:w-auto">
+          <div className="flex overflow-x-auto no-scrollbar items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs font-medium w-full sm:w-auto pb-0.5">
             <button
               onClick={() => setStockFilter('all')}
-              className={`px-3 py-1 rounded transition-colors ${
+              className={`shrink-0 px-3 py-1 rounded-md transition-colors ${
                 stockFilter === 'all'
                   ? 'bg-white text-slate-900 shadow-xs font-semibold'
                   : 'text-slate-600'
@@ -98,7 +121,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
             </button>
             <button
               onClick={() => setStockFilter('in_stock')}
-              className={`px-3 py-1 rounded transition-colors ${
+              className={`shrink-0 px-3 py-1 rounded-md transition-colors ${
                 stockFilter === 'in_stock'
                   ? 'bg-white text-slate-900 shadow-xs font-semibold'
                   : 'text-slate-600'
@@ -108,7 +131,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
             </button>
             <button
               onClick={() => setStockFilter('out_of_stock')}
-              className={`px-3 py-1 rounded transition-colors ${
+              className={`shrink-0 px-3 py-1 rounded-md transition-colors ${
                 stockFilter === 'out_of_stock'
                   ? 'bg-white text-slate-900 shadow-xs font-semibold'
                   : 'text-slate-600'
@@ -153,7 +176,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                 {/* Photo & Stock Badge */}
                 <div className="relative w-full h-44 rounded-lg overflow-hidden bg-slate-100 mb-3 border border-slate-100">
                   <img
-                    src={product.images[0] || product.telegramAlbumImages[0]}
+                    src={product.images[0]}
                     alt={product.name}
                     className="w-full h-full object-cover"
                   />

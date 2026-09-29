@@ -83,33 +83,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl max-w-3xl w-full max-h-[96vh] sm:max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+        {/* Header - Sticky top with guaranteed close button */}
+        <div className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-slate-100 bg-white/95 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white shrink-0 flex items-center justify-center font-bold text-xs">
               <Sliders className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Marketing Automation Rules & Brand Identity
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                Marketing Rules & Settings
               </h2>
-              <p className="text-xs text-slate-500">
-                Configure autonomous niche parameters, daily limits, and brand watermark
+              <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+                Autonomous parameters, daily limits, and brand identity
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 flex items-center justify-center transition-all shadow-xs border border-slate-200"
+            aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-slate-800" />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
+        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Section 1: Posting Rules (Specification Item 11) */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-1">
@@ -175,6 +176,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
+              </div>
+            </div>
+
+            {/* Peak Hours Timing Info Card */}
+            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-900">
+                  ⚡ হাই-এনগেজমেন্ট পিক-আওয়ার শিডিউল (দৈনিক ৩-৪টি পোস্ট)
+                </span>
+                <span className="text-[10px] px-2 py-0.5 bg-blue-200/70 text-blue-800 font-semibold rounded">
+                  Bangladesh Time (BST)
+                </span>
+              </div>
+              <p className="text-[11px] text-blue-700 leading-relaxed">
+                ফেসবুক পেজ ও ইনস্টাগ্রামে সর্বোচ্চ রিচ ও অর্গানিক ভিউ পাওয়ার জন্য এই ৪টি স্লটে স্বয়ংক্রিয়ভাবে পাবলিশ হয়:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                <div className="bg-white/80 p-2 rounded-lg border border-blue-100 text-[11px] text-slate-700 flex items-center justify-between">
+                  <span className="font-semibold text-blue-950">১. দুপুর ১:৩০ - ২:৩০</span>
+                  <span className="text-[10px] text-slate-500">লাঞ্চ ব্রেক ব্রাউজিং</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-blue-100 text-[11px] text-slate-700 flex items-center justify-between">
+                  <span className="font-semibold text-blue-950">২. সন্ধ্যা ৬:৩০ - ৭:৩০</span>
+                  <span className="text-[10px] text-slate-500">বাসায় ফেরা ও আড্ডা</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-blue-100 text-[11px] text-slate-700 flex items-center justify-between">
+                  <span className="font-semibold text-blue-950">৩. রাত ৯:০০ - ১০:৩০</span>
+                  <span className="text-[10px] text-blue-600 font-bold">প্রাইম পিক ভিউ ⭐</span>
+                </div>
+                <div className="bg-white/80 p-2 rounded-lg border border-blue-100 text-[11px] text-slate-700 flex items-center justify-between">
+                  <span className="font-semibold text-blue-950">৪. রাত ১১:৩০ - ১২:১৫</span>
+                  <span className="text-[10px] text-slate-500">লেইট নাইট অনলাইন শপিং</span>
+                </div>
               </div>
             </div>
 

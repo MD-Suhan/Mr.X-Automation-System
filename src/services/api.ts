@@ -80,6 +80,18 @@ export const api = {
     return res.json();
   },
 
+  async syncBadhonsWorld(): Promise<{ success: boolean; count: number; products: SupplierProduct[] }> {
+    const res = await fetch('/api/supplier/sync', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to sync from Badhons World');
+    return res.json();
+  },
+
+  async runAutoPilotCycle(): Promise<{ success: boolean; item?: PipelineItem; message: string }> {
+    const res = await fetch('/api/pipeline/run-autopilot-cycle', { method: 'POST' });
+    if (!res.ok) throw new Error('Auto-Pilot cycle failed');
+    return res.json();
+  },
+
   async runFullPipeline(productId?: string): Promise<{ success: boolean; item?: PipelineItem; message?: string }> {
     const res = await fetch('/api/pipeline/run-full', {
       method: 'POST',

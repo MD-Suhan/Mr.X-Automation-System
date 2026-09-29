@@ -59,33 +59,34 @@ export const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[96vh] sm:max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+        {/* Header - Sticky top with guaranteed close button */}
+        <div className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-slate-100 bg-white/95 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white shrink-0 flex items-center justify-center font-bold text-xs">
               <Key className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Real Integrations & Accounts Setup (কানেকশন গাইড)
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                Connect Accounts & APIs
               </h2>
-              <p className="text-xs text-slate-500">
-                Facebook Page, Instagram Business, Telegram Private Channel & Badhons World Scraper
+              <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+                Facebook Page, Instagram, Telegram & Badhons World Scraper
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            className="shrink-0 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 flex items-center justify-center transition-all shadow-xs border border-slate-200"
+            aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-slate-800" />
           </button>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 px-6 pt-3 border-b border-slate-100 bg-slate-50/50 text-xs font-semibold overflow-x-auto">
+        <div className="flex items-center gap-1 px-3 sm:px-6 pt-2 border-b border-slate-100 bg-slate-50/50 text-xs font-semibold overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-3 py-2 border-b-2 transition-colors ${

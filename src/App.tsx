@@ -77,6 +77,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
+  const [isSyncingBadhons, setIsSyncingBadhons] = useState(false);
+  const [isRunningAutoPilot, setIsRunningAutoPilot] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const showToast = (type: 'success' | 'error' | 'info', text: string) => {
@@ -227,6 +229,41 @@ export default function App() {
     }
   };
 
+  const handleSyncBadhonsWorld = async () => {
+    setIsSyncingBadhons(true);
+    try {
+      const res = await api.syncBadhonsWorld();
+      if (res.success) {
+        showToast('success', `badhonsworld.com থেকে মোট ${res.count}টি আসল প্রোডাক্ট ও ক্লাউডফ্রন্ট ছবি সফলভাবে সিঙ্ক হয়েছে!`);
+        fetchData();
+      }
+    } catch (err: any) {
+      showToast('error', `সিঙ্ক ব্যর্থ: ${err.message}`);
+    } finally {
+      setIsSyncingBadhons(false);
+    }
+  };
+
+  const handleRunAutoPilotCycle = async () => {
+    setIsRunningAutoPilot(true);
+    try {
+      const res = await api.runAutoPilotCycle();
+      if (res.success) {
+        showToast('success', res.message || 'অটো-পাইলট প্রকাশ সফল হয়েছে!');
+        fetchData();
+        if (res.item) {
+          setSelectedStudioItem(res.item);
+        }
+      } else {
+        showToast('info', res.message || 'Auto-Pilot cycle failed');
+      }
+    } catch (err: any) {
+      showToast('error', `Auto-Pilot ব্যর্থ: ${err.message}`);
+    } finally {
+      setIsRunningAutoPilot(false);
+    }
+  };
+
   // Pipeline Item Actions
   const handleApproveAndPublish = async (itemId: string) => {
     try {
@@ -332,6 +369,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenLogs={() => setIsLogsOpen(true)}
         onOpenIntegrations={() => setIsIntegrationsOpen(true)}
+        onRunAutoPilotCycle={handleRunAutoPilotCycle}
+        isRunningAutoPilot={isRunningAutoPilot}
       />
 
       {/* Toast Notification Banner */}
@@ -358,8 +397,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Container - Mobile Responsive Padding */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 lg:px-8 py-3 sm:py-6">
         {/* Metric Cards Banner */}
         <DashboardStats
           publishedToday={status?.publishedToday || 0}
@@ -427,6 +466,8 @@ export default function App() {
             products={catalogue}
             onRunProductPipeline={(productId) => handleRunPipeline(productId)}
             isRunningPipeline={isRunningPipeline}
+            onSyncBadhons={handleSyncBadhonsWorld}
+            isSyncing={isSyncingBadhons}
           />
         )}
 
