@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" width="400" height="160">
+  <defs>
+    <linearGradient id="blueGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0066cc"/>
+    </linearGradient>
+  </defs>
+  <!-- Mr. text -->
+  <text x="145" y="68" font-family="'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif" font-style="italic" font-weight="900" font-size="52" fill="#0f172a" text-anchor="end">Mr.</text>
+  <!-- Stylized X -->
+  <path d="M 160 22 L 205 78" stroke="url(#blueGradDark)" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 205 22 L 160 78" stroke="url(#blueGradDark)" stroke-width="12" stroke-linecap="round"/>
+  <!-- Highlight stroke -->
+  <path d="M 164 26 L 198 70" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+  <!-- SHOP divider banner -->
+  <line x1="70" y1="102" x2="135" y2="102" stroke="rgba(15,23,42,0.3)" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="200" y="107" font-family="'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif" font-weight="800" font-size="18" letter-spacing="6" fill="#0f172a" text-anchor="middle">S H O P</text>
+  <line x1="265" y1="102" x2="330" y2="102" stroke="rgba(15,23,42,0.3)" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Tagline -->
+  <text x="200" y="132" font-family="'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif" font-weight="600" font-size="11" letter-spacing="3" fill="rgba(15,23,42,0.65)" text-anchor="middle">SMART GADGETS · BETTER LIFE</text>
+</svg>

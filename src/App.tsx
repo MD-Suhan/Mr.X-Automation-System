@@ -300,6 +300,18 @@ export default function App() {
     }
   };
 
+  const handleTogglePause = async (itemId: string) => {
+    try {
+      const res = await api.pipelineAction(itemId, 'toggle_pause');
+      if (res.success) {
+        showToast('info', 'Evergreen rotation status updated.');
+        fetchData();
+      }
+    } catch (err: any) {
+      showToast('error', `Status update failed: ${err.message}`);
+    }
+  };
+
   // Regenerate Creative in Studio
   const handleRegenerateCreative = async (itemId: string, theme?: string) => {
     try {
@@ -435,6 +447,7 @@ export default function App() {
               onOpenStudio={(item) => setSelectedStudioItem(item)}
               onQuickApprove={handleQuickApprove}
               onApproveAndPublish={handleApproveAndPublish}
+              onTogglePause={handleTogglePause}
               onReject={handleReject}
               onDelete={handleDelete}
             />

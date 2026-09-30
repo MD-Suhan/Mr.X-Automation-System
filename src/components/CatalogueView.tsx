@@ -174,7 +174,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
             >
               <div>
                 {/* Photo & Stock Badge */}
-                <div className="relative w-full h-44 rounded-lg overflow-hidden bg-slate-100 mb-3 border border-slate-100">
+                <div className="relative w-full h-44 rounded-lg overflow-hidden bg-slate-100 mb-2 border border-slate-100">
                   <img
                     src={product.images[0]}
                     alt={product.name}
@@ -196,14 +196,34 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                   </div>
                 </div>
 
-                {/* Category & Title */}
+                {/* Badhons World Reference Images Gallery Strip */}
+                {product.images && product.images.length > 1 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-2.5">
+                    {product.images.map((img, idx) => (
+                      <div
+                        key={idx}
+                        className="relative w-9 h-9 rounded border border-slate-200 overflow-hidden shrink-0 bg-slate-50"
+                        title={`Badhons World Reference #${idx + 1}`}
+                      >
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                    <span className="text-[10px] text-slate-400 font-semibold px-1 whitespace-nowrap">
+                      {product.images.length} photos
+                    </span>
+                  </div>
+                )}
+
+                {/* Source of Truth Indicator */}
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                  <span>{product.category}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    Source: Badhons World
+                  </span>
                   <a
                     href={product.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                    className="inline-flex items-center gap-1 text-blue-600 hover:underline text-[11px] font-medium"
                   >
                     <span>badhonsworld.com</span>
                     <ExternalLink className="w-3 h-3" />

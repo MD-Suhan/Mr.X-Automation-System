@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import fs from 'fs';
 import { GoogleGenAI, Type } from '@google/genai';
 import type {
   SupplierProduct,
@@ -15,6 +16,7 @@ import type {
   AIAnalysisResult,
   SocialCaption,
   QualityCheckResult,
+  PostHistoryRecord,
 } from './src/types/index.ts';
 
 dotenv.config();
@@ -36,7 +38,7 @@ const ai = geminiApiKey
     })
   : null;
 
-// Initial In-Memory State
+// Initial State
 let brandSettings: BrandSettings = {
   brandName: 'Mr.X Shop',
   tagline: 'SMART GADGETS · BETTER LIFE',
@@ -47,6 +49,7 @@ let brandSettings: BrandSettings = {
   socialHandle: '@mrxshop.bd',
   accentColor: '#0088ff',
   enablePriceInPoster: false,
+  customLogoUrl: '/images/mrx_shop_logo.svg',
 };
 
 let postingRules: PostingRules = {
@@ -57,11 +60,13 @@ let postingRules: PostingRules = {
   blockedCategories: ['Beauty', 'Kitchen', 'Toys', 'Clothing'],
   autonomousEnabled: true,
   autoIntervalMinutes: 30,
-  requireManualApproval: false,
-  metaFacebookPageId: 'fb_page_892301982',
+  requireManualApproval: true, // STRICT: Manual approval required. Never draft -> publish directly!
+  metaFacebookPageId: '',
   metaFacebookPageName: 'Mr.X Shop Official',
+  metaFacebookPageToken: '',
   metaInstagramHandle: '@mrxshop_official',
-  metaConnected: true,
+  metaInstagramAccountId: '',
+  metaConnected: false, // Only true when real Meta credentials confirmed
   peakHoursSlots: [
     '1:30 PM - 2:30 PM BST (Lunch Browse Peak)',
     '6:30 PM - 7:30 PM BST (Evening Commute Peak)',
@@ -69,6 +74,68 @@ let postingRules: PostingRules = {
     '11:30 PM - 12:15 AM BST (Late Night Shopping)'
   ],
 };
+
+// Persistent Storage for Cloud Run Restarts & Redeployments
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_FILE = path.join(DATA_DIR, 'app_state.json');
+
+let publicationHistory: PostHistoryRecord[] = [];
+let schedulerState = {
+  lastScheduledRun: undefined as string | undefined,
+  nextScheduledRun: undefined as string | undefined,
+  totalRuns: 0,
+};
+
+function saveStateToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const stateData = {
+      brandSettings,
+      postingRules,
+      catalogueProducts,
+      pipelineItems,
+      publicationHistory,
+      systemLogs: systemLogs.slice(0, 150),
+      schedulerState,
+    };
+    const tmpFile = `${DATA_FILE}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(stateData, null, 2), 'utf-8');
+    fs.renameSync(tmpFile, DATA_FILE);
+  } catch (err: any) {
+    console.error('[Persistence] Error saving state to disk:', err.message);
+  }
+}
+
+function loadStateFromDisk() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const loaded = JSON.parse(raw);
+      if (loaded.brandSettings) brandSettings = { ...brandSettings, ...loaded.brandSettings };
+      if (loaded.postingRules) postingRules = { ...postingRules, ...loaded.postingRules };
+      if (Array.isArray(loaded.catalogueProducts) && loaded.catalogueProducts.length > 0) {
+        catalogueProducts = loaded.catalogueProducts;
+      }
+      if (Array.isArray(loaded.pipelineItems) && loaded.pipelineItems.length > 0) {
+        pipelineItems = loaded.pipelineItems;
+      }
+      if (Array.isArray(loaded.publicationHistory)) {
+        publicationHistory = loaded.publicationHistory;
+      }
+      if (Array.isArray(loaded.systemLogs) && loaded.systemLogs.length > 0) {
+        systemLogs = loaded.systemLogs;
+      }
+      if (loaded.schedulerState) {
+        schedulerState = loaded.schedulerState;
+      }
+      console.log(`[Persistence] Hydrated state from ${DATA_FILE}: ${pipelineItems.length} items, ${publicationHistory.length} post history records.`);
+    }
+  } catch (err: any) {
+    console.error('[Persistence] Error loading state from disk:', err.message);
+  }
+}
 
 // Seed Badhons World / Mayons BD Products with 10-15 realistic Telegram album images
 let catalogueProducts: SupplierProduct[] = [
@@ -489,6 +556,59 @@ let pipelineItems: PipelineItem[] = [];
 // System Activity Logs
 let systemLogs: SystemLog[] = [];
 
+// Hydrate state from persistent storage on startup
+loadStateFromDisk();
+
+// If pipeline items are empty on fresh start, seed initial drafts for review
+if (pipelineItems.length === 0) {
+  catalogueProducts.slice(0, 4).forEach((product, idx) => {
+    const isApprovedInit = idx === 0; // First item pre-approved for immediate evergreen demonstration
+    pipelineItems.push({
+      id: `pipe-init-${Date.now()}-${idx}`,
+      productId: product.id,
+      productName: product.name,
+      category: product.category,
+      productUrl: product.url,
+      supplier: product.supplierName,
+      trendId: trendTopics[0]?.id || 'trend-001',
+      trendTitle: trendTopics[0]?.title || 'Viral Gadgets Bangladesh',
+      trendScore: 88,
+      stage: isApprovedInit ? 'ready_approved' : 'draft_review',
+      isApproved: isApprovedInit,
+      isPaused: false,
+      stockVerified: true,
+      telegramAlbumFound: true,
+      images: product.images,
+      heroImage: product.images[0],
+      totalPublishedCount: 0,
+      creative: {
+        headline: product.name.split(' ').slice(0, 3).join(' ').toUpperCase(),
+        subheadline: `${product.category} Official Edition`,
+        calloutBadges: product.features.slice(0, 3),
+        badgeColor: '#0088ff',
+        theme: 'cinematic_dark',
+        heroImageUrl: product.images[0],
+        brandWatermark: true,
+      },
+      caption: {
+        banglaTitle: product.name,
+        summaryHook: 'Smarter Choice for Modern Living',
+        bulletPoints: product.features.slice(0, 3),
+        callToAction: '📩 অর্ডার করতে Inbox / WhatsApp করুন (01822300348) অথবা Website-এ।',
+        hashtags: ['#MrXShop', `#${product.category.replace(/\s+/g, '')}`, '#TechGadgetsBD', '#SmartGadgetBD'],
+        fullFormattedText: `${product.name}\n\nSmarter Choice for Modern Living\nদৈনন্দিন কাজ ও বিনোদনে অসাধারণ পারফরম্যান্স। অথেনটিক কোয়ালিটি ও অফিসিয়াল ওয়ারেন্টি সুবিধা।\n\n📩 অর্ডার করতে Inbox / WhatsApp করুন। অথবা অর্ডার করুন Website-এ।\n\n📲 WhatsApp: 01822300348\n🌐 Website: https://mrxshopbd.web.app\n\n#MrXShop #${product.category.replace(/\s+/g, '')} #TechGadgetsBD #SmartGadgetBD`,
+      },
+      publishing: {
+        facebook: { posted: false, metrics: { likes: 0, comments: 0, shares: 0 } },
+        instagram: { posted: false, metrics: { likes: 0, comments: 0, saves: 0 } },
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  saveStateToDisk();
+}
+
 function addLog(
   level: 'info' | 'success' | 'warn' | 'error',
   stage: SystemLog['stage'],
@@ -808,11 +928,17 @@ function extractCustomerFacingFeatures(productName: string, category: string, ra
 }
 
 function generateCleanCustomerDescription(productName: string, category: string, rawDescription: string = ''): string {
-  const clean = rawDescription.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-  if (clean.length > 30 && !clean.toLowerCase().includes("badhon") && !clean.includes("সেলার প্রাইস")) {
-    return clean.slice(0, 160);
+  const clean = rawDescription
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length > 20) {
+    return clean;
   }
-  return `${productName} — প্রিমিয়াম কোয়ালিটি ও আধুনিক প্রযুক্তির সমন্বয়ে তৈরি। দৈনন্দিন স্মার্ট লাইফস্টাইলের সেরা সঙ্গী।`;
+  return `${productName} — Authentic product details from Badhons World inventory.`;
 }
 
 // Live Synchronizer from badhonsworld.com
@@ -1008,23 +1134,58 @@ seedInitialPipeline();
 syncFromBadhonsWorld().catch(() => {});
 
 // AI Orchestration Functions with Gemini
+async function callGeminiSafe(params: {
+  contents: string;
+  responseMimeType?: string;
+  temperature?: number;
+}): Promise<string | null> {
+  if (!ai) return null;
+  // Try flash-lite first to avoid quota exhaustion, then fallback to flash-3.8 and flash-latest
+  const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+  for (const model of candidateModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: params.contents,
+        config: {
+          responseMimeType: params.responseMimeType || 'application/json',
+          temperature: params.temperature ?? 0.7,
+        },
+      });
+      if (response && response.text) {
+        return response.text;
+      }
+    } catch (err: any) {
+      console.warn(`[Gemini] Model ${model} execution notice: ${err.message}`);
+    }
+  }
+  return null;
+}
+
 async function runGeminiProductAnalysis(product: SupplierProduct): Promise<AIAnalysisResult> {
   if (ai) {
     try {
       const prompt = `You are a world-class e-commerce growth marketing analyst specializing in Bangladesh consumer tech gadgets.
-Analyse this product from supplier Badhons World / Mayons BD:
+CRITICAL MANDATE — BADHONS WORLD AS SOURCE OF TRUTH:
+- Product name, ALL available product images, description and available product information must come from Badhons World reseller catalog.
+- Badhons World is the SOURCE OF TRUTH for product data.
+- Do NOT replace Badhons World product data with random web-search results or AI-invented product information.
+- If required information is missing from Badhons World, do not invent it; leave it out.
+
+Analyse this product from supplier Badhons World:
 Product Name: ${product.name}
 Category: ${product.category}
 Description: ${product.description}
 Key Specs: ${JSON.stringify(product.specifications)}
 Features: ${product.features.join('; ')}
+Reference Photos Count: ${product.images.length}
 
 Determine:
 1. Target Customer persona in Bangladesh (students, professionals, gamers, travellers, etc.)
-2. 4 most impactful selling points to highlight in high-conversion social ad
+2. 4 most impactful selling points grounded strictly in the Badhons World info above
 3. Recommended visual style ('cinematic_dark' | 'cyber_neon' | 'minimal_luxury' | 'studio_tech')
-4. Index of best hero image (0 to 3)
-5. Marketing angle / hook
+4. Index of best hero reference image (0 to ${Math.max(0, product.images.length - 1)})
+5. Marketing angle / hook grounded in real product features
 6. Psychological appeal
 
 Return in JSON format strictly matching this schema:
@@ -1038,28 +1199,26 @@ Return in JSON format strictly matching this schema:
   "sentimentAppeal": "string"
 }`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const text = await callGeminiSafe({
         contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        },
+        responseMimeType: 'application/json',
+        temperature: 0.7,
       });
 
-      const text = response.text || '';
-      const parsed = JSON.parse(text);
-      return {
-        productSummary: parsed.productSummary || product.description.slice(0, 120),
-        targetCustomer: parsed.targetCustomer || 'Tech enthusiasts & smart gadget users',
-        keySellingPoints: parsed.keySellingPoints || product.features.slice(0, 4),
-        visualStyle: parsed.visualStyle || 'cinematic_dark',
-        heroImageIndex: typeof parsed.heroImageIndex === 'number' ? parsed.heroImageIndex : 0,
-        angleToHighlight: parsed.angleToHighlight || 'Premium Innovation & Convenience',
-        sentimentAppeal: parsed.sentimentAppeal || 'Modern lifestyle upgrade',
-      };
+      if (text) {
+        const parsed = JSON.parse(text);
+        return {
+          productSummary: parsed.productSummary || product.description.slice(0, 120),
+          targetCustomer: parsed.targetCustomer || 'Tech enthusiasts & smart gadget users',
+          keySellingPoints: parsed.keySellingPoints || product.features.slice(0, 4),
+          visualStyle: parsed.visualStyle || 'cinematic_dark',
+          heroImageIndex: typeof parsed.heroImageIndex === 'number' ? parsed.heroImageIndex : 0,
+          angleToHighlight: parsed.angleToHighlight || 'Premium Design & High Reliability',
+          sentimentAppeal: parsed.sentimentAppeal || 'Style prestige & smart productivity',
+        };
+      }
     } catch (err: any) {
-      addLog('warn', 'AI_ANALYST', `Gemini API fallback for analysis: ${err.message}`);
+      addLog('warn', 'AI_ANALYST', `Gemini product analyst fallback: ${err.message}`);
     }
   }
 
@@ -1091,16 +1250,24 @@ async function runGeminiCaptionGeneration(
 
   if (ai) {
     try {
-      const prompt = `Create a modern, minimalistic and ready-to-post social media caption for this product based on the user's official specification:
+      const prompt = `You are a professional social media copywriter for Mr.X Shop Bangladesh.
+CRITICAL MANDATE — BADHONS WORLD AS SOURCE OF TRUTH:
+- Product name, ALL description and available product information must come from Badhons World.
+- Badhons World is the SOURCE OF TRUTH for product data.
+- Do NOT replace Badhons World product data with random web-search results or AI-invented product information.
+- Product description and caption must be based strictly on the actual Badhons World product information.
+- Do NOT invent fake specifications, fake warranties, discounts, or unsupported claims.
+- If required information is missing from Badhons World, do not invent it; leave it out.
+
 Product Name: ${product.name}
-Product Description: ${product.description}
-Key Specs: ${product.features.join(' | ')}
+Badhons World Description: ${product.description}
+Badhons World Features: ${product.features.join(' | ')}
 Target Audience: ${analysis.targetCustomer}
 
 Rules:
-1. Line 1: Exact product name and important model/capacity.
+1. Line 1: Exact product name and model from Badhons World.
 2. Line 2: A short, catchy English hook related to the product (e.g. "Smarter Sound, More Control" or "Power Beyond Limits").
-3. Line 3: A concise, natural Bangla description explaining the product's main use, benefit or appeal.
+3. Line 3: A concise, natural Bangla description explaining the product's main use, benefit or appeal based strictly on the Badhons World information.
 4. Ordering Call-To-Action: "📩 অর্ডার করতে Inbox / WhatsApp করুন। অথবা অর্ডার করুন Website-এ।"
 5. Official Contact:
    "📲 WhatsApp: ${whatsappNum}"
@@ -1111,34 +1278,33 @@ Rules:
 Return strictly JSON:
 {
   "englishHook": "Short catchy English hook",
-  "banglaDescription": "Natural Bangla concise description",
+  "banglaDescription": "Natural Bangla concise description strictly grounded in Badhons World info",
   "hashtags": ["#MrXShop", "#ProductCategory", "..."]
 }`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const text = await callGeminiSafe({
         contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        },
+        responseMimeType: 'application/json',
+        temperature: 0.7,
       });
 
-      const parsed = JSON.parse(response.text || '{}');
-      const englishHook = parsed.englishHook || 'Smarter Sound, More Control';
-      const banglaDescription = parsed.banglaDescription || 'আপনার গ্যাজেট এক্সপেরিয়েন্সকে আরও প্রিমিয়াম ও স্মুথ করতে চলে এলো আকর্ষণীয় ডিজাইনের এই ডিভাইস। চমৎকার পারফর্ম্যান্স ও নির্ভরযোগ্য ব্যাটারি ব্যাকআপ!';
-      const hashtagsList = parsed.hashtags || ['#MrXShop', `#${product.category.replace(/\s+/g, '')}`, '#SmartGadget', '#TechBD'];
+      if (text) {
+        const parsed = JSON.parse(text);
+        const englishHook = parsed.englishHook || 'Smarter Sound, More Control';
+        const banglaDescription = parsed.banglaDescription || 'আপনার গ্যাজেট এক্সপেরিয়েন্সকে আরও প্রিমিয়াম ও স্মুথ করতে চলে এলো আকর্ষণীয় ডিজাইনের এই ডিভাইস। চমৎকার পারফর্ম্যান্স ও নির্ভরযোগ্য ব্যাটারি ব্যাকআপ!';
+        const hashtagsList = parsed.hashtags || ['#MrXShop', `#${product.category.replace(/\s+/g, '')}`, '#SmartGadget', '#TechBD'];
 
-      const fullFormattedText = `${product.name}\n\n${englishHook}\n${banglaDescription}\n\n📩 অর্ডার করতে Inbox / WhatsApp করুন। অথবা অর্ডার করুন Website-এ।\n\n📲 WhatsApp: ${whatsappNum}\n🌐 Website: ${siteUrl}\n\n${hashtagsList.join(' ')}`;
+        const fullFormattedText = `${product.name}\n\n${englishHook}\n${banglaDescription}\n\n📩 অর্ডার করতে Inbox / WhatsApp করুন। অথবা অর্ডার করুন Website-এ।\n\n📲 WhatsApp: ${whatsappNum}\n🌐 Website: ${siteUrl}\n\n${hashtagsList.join(' ')}`;
 
-      return {
-        banglaTitle: product.name,
-        summaryHook: englishHook,
-        bulletPoints: product.features.slice(0, 4),
-        callToAction: `📩 অর্ডার করতে Inbox / WhatsApp করুন (${whatsappNum}) অথবা Website-এ।`,
-        hashtags: hashtagsList,
-        fullFormattedText,
-      };
+        return {
+          banglaTitle: product.name,
+          summaryHook: englishHook,
+          bulletPoints: product.features.slice(0, 4),
+          callToAction: `📩 অর্ডার করতে Inbox / WhatsApp করুন (${whatsappNum}) অথবা Website-এ।`,
+          hashtags: hashtagsList,
+          fullFormattedText,
+        };
+      }
     } catch (err: any) {
       addLog('warn', 'CREATIVE_STUDIO', `Gemini caption generator fallback: ${err.message}`);
     }
@@ -1180,10 +1346,14 @@ async function runGeminiQualityCheck(
   if (ai) {
     try {
       const prompt = `You are a strict Safety / Quality Gate Inspector for an autonomous e-commerce marketing publishing system.
+CRITICAL CHECK — BADHONS WORLD AS SOURCE OF TRUTH:
+Badhons World is the SOURCE OF TRUTH for product data. Verify that product claims and specifications in the caption and creative strictly adhere to the authentic Badhons World information provided below, without AI-invented claims, fake warranties, or fabricated specs.
+
 Evaluate this prepared advertisement before social publishing:
 Product: ${product.name}
+Badhons World Description: ${product.description}
 Stock Status: ${product.stockStatus} (Quantity: ${product.stockQuantity})
-Images Available: ${product.telegramAlbumImages.length} photos
+Images Available from Badhons World: ${product.images.length} photos
 Caption Text: ${caption.fullFormattedText}
 Poster Headline: ${creative.headline}
 
@@ -1192,7 +1362,8 @@ Validate:
 2. Does the creative maintain correct product fidelity without confusing shapes?
 3. Is caption text readable with proper grammar and correct Bangla spelling?
 4. Are claims realistic and free of false medical or impossible guarantees?
-5. Is the supplier stock verified and genuinely available?
+5. Is the product description and caption strictly grounded in Badhons World information without hallucinations?
+6. Is the supplier stock verified and genuinely available from Badhons World?
 
 Return strictly as JSON:
 {
@@ -1204,54 +1375,72 @@ Return strictly as JSON:
     "textReadable": boolean,
     "spellingCorrect": boolean,
     "noMisleadingClaim": boolean,
-    "stockAvailable": boolean
+    "stockAvailable": boolean,
+    "badhonsWorldTruthGrounded": boolean
   },
   "notes": "string explanation"
 }`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const text = await callGeminiSafe({
         contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
+        responseMimeType: 'application/json',
+        temperature: 0.2,
       });
 
-      const parsed = JSON.parse(response.text || '{}');
+      if (text) {
+        const parsed = JSON.parse(text);
+        const stockOk = product.stockStatus === 'in_stock' && product.stockQuantity > 0;
+        const truthGrounded = parsed.checks?.badhonsWorldTruthGrounded !== false;
+        const passed = Boolean(parsed.passed && (parsed.score ?? 0) >= 70 && stockOk && truthGrounded);
+        return {
+          passed,
+          score: typeof parsed.score === 'number' ? parsed.score : (passed ? 75 : 45),
+          checks: {
+            imageClear: Boolean(parsed.checks?.imageClear),
+            correctProductFidelity: Boolean(parsed.checks?.correctProductFidelity),
+            textReadable: Boolean(parsed.checks?.textReadable),
+            spellingCorrect: Boolean(parsed.checks?.spellingCorrect),
+            noMisleadingClaim: Boolean(parsed.checks?.noMisleadingClaim),
+            stockAvailable: stockOk,
+            badhonsWorldTruthGrounded: truthGrounded,
+          },
+          notes: parsed.notes || (passed ? 'Verified safety, fidelity and Badhons World factual grounding.' : 'Failed AI safety or Badhons World factual grounding criteria.'),
+          checkedAt: new Date().toISOString(),
+        };
+      }
+    } catch (err: any) {
+      addLog('warn', 'QUALITY_GATE', `Gemini quality gate check error: ${err.message}`);
       return {
-        passed: parsed.passed && product.stockStatus === 'in_stock',
-        score: parsed.score || 92,
+        passed: false,
+        score: 50,
         checks: {
-          imageClear: parsed.checks?.imageClear ?? true,
-          correctProductFidelity: parsed.checks?.correctProductFidelity ?? true,
-          textReadable: parsed.checks?.textReadable ?? true,
-          spellingCorrect: parsed.checks?.spellingCorrect ?? true,
-          noMisleadingClaim: parsed.checks?.noMisleadingClaim ?? true,
+          imageClear: true,
+          correctProductFidelity: false,
+          textReadable: true,
+          spellingCorrect: true,
+          noMisleadingClaim: true,
           stockAvailable: product.stockStatus === 'in_stock',
         },
-        notes: parsed.notes || 'Quality validation passed all visual and safety criteria.',
+        notes: `Quality verification failed due to inspector error: ${err.message}. Manual review required before approval.`,
         checkedAt: new Date().toISOString(),
       };
-    } catch (err: any) {
-      addLog('warn', 'QUALITY_GATE', `Gemini quality gate fallback: ${err.message}`);
     }
   }
 
   const stockOk = product.stockStatus === 'in_stock' && product.stockQuantity > 0;
   return {
-    passed: stockOk,
-    score: stockOk ? 95 : 40,
+    passed: false,
+    score: stockOk ? 55 : 30,
     checks: {
       imageClear: true,
-      correctProductFidelity: true,
+      correctProductFidelity: false,
       textReadable: true,
       spellingCorrect: true,
       noMisleadingClaim: true,
       stockAvailable: stockOk,
     },
     notes: stockOk
-      ? 'All visual, stock availability, and textual verification gates passed with high confidence.'
+      ? 'Automated inspector offline. Held in draft for operator manual inspection and approval.'
       : 'REJECTED AT QUALITY GATE: Product is currently out of stock at Badhons World supplier warehouse.',
     checkedAt: new Date().toISOString(),
   };
@@ -1278,18 +1467,26 @@ async function executeAutonomousPipeline(selectedProductId?: string): Promise<Pi
   if (selectedProductId) {
     candidateProduct = catalogueProducts.find(p => p.id === selectedProductId);
   } else {
-    // Find un-processed product matching allowed categories
+    // Find candidate product matching allowed categories, preferring products without an active draft
     candidateProduct = catalogueProducts.find(
       p =>
         postingRules.allowedCategories.includes(p.category) &&
         !postingRules.blockedCategories.includes(p.category) &&
-        !processedProductIds.has(p.id) &&
-        !processedProductIds.has(p.url)
+        p.stockStatus === 'in_stock' &&
+        !pipelineItems.some(i => i.productId === p.id && i.stage === 'draft_review')
     );
+    if (!candidateProduct) {
+      candidateProduct = catalogueProducts.find(
+        p =>
+          postingRules.allowedCategories.includes(p.category) &&
+          !postingRules.blockedCategories.includes(p.category) &&
+          p.stockStatus === 'in_stock'
+      );
+    }
   }
 
   if (!candidateProduct) {
-    addLog('warn', 'STOCK_CHECK', 'All available products in this category have already been processed (Duplicate Protection active).');
+    addLog('warn', 'STOCK_CHECK', 'No in-stock products found matching allowed category rules.');
     return null;
   }
 
@@ -1373,48 +1570,16 @@ async function executeAutonomousPipeline(selectedProductId?: string): Promise<Pi
     return newItem;
   }
 
-  newItem.stage = 'quality_approved';
-  addLog('success', 'QUALITY_GATE', `Quality Gate Passed with score ${quality.score}/100.`);
-
-  // 7. Facebook & Instagram Publishing
-  if (postingRules.requireManualApproval) {
-    addLog('info', 'META_PUBLISH', 'Manual approval required by posting rules. Waiting for user review.');
-    return newItem;
-  }
-
-  addLog('info', 'META_PUBLISH', `Publishing promotional post to Facebook Page (${postingRules.metaFacebookPageName}) & Instagram (${postingRules.metaInstagramHandle})...`);
-
-  // Simulate Meta Graph API Dispatch
-  const fbPostId = `fb_${Date.now()}`;
-  const igPostId = `ig_${Date.now()}`;
-
-  newItem.publishing.facebook = {
-    posted: true,
-    postId: fbPostId,
-    pageName: postingRules.metaFacebookPageName,
-    postUrl: `https://facebook.com/mrxshop/posts/${fbPostId}`,
-    timestamp: new Date().toISOString(),
-    metrics: { likes: Math.floor(Math.random() * 20) + 5, comments: 2, shares: 1 },
-  };
-
-  newItem.publishing.instagram = {
-    posted: true,
-    postId: igPostId,
-    accountHandle: postingRules.metaInstagramHandle,
-    postUrl: `https://instagram.com/p/${igPostId}`,
-    timestamp: new Date().toISOString(),
-    metrics: { likes: Math.floor(Math.random() * 30) + 10, comments: 3, saves: 4 },
-  };
-
-  newItem.stage = 'published';
+  // 7. Manual Approval Requirement & Evergreen Pool Placement
+  // Strictly enforce: Never Draft -> Publish directly! Automatic posting only uses user-approved content.
+  newItem.stage = 'draft_review';
+  newItem.isApproved = false;
+  newItem.isPaused = false;
+  newItem.totalPublishedCount = 0;
   newItem.updatedAt = new Date().toISOString();
+  saveStateToDisk();
 
-  // Register in Duplicate Protection Registry
-  processedProductIds.add(candidateProduct.id);
-  processedProductIds.add(candidateProduct.url);
-
-  addLog('success', 'META_PUBLISH', `Successfully published to Facebook Page & Instagram Business feed!`);
-
+  addLog('info', 'APPROVAL_GATE', `"${newItem.productName}" placed into Draft Review queue (Score: ${quality.score}/100). Manual operator approval required before publishing.`);
   return newItem;
 }
 
@@ -1550,80 +1715,285 @@ async function checkAndReplenishBufferPool(): Promise<boolean> {
   return false;
 }
 
-// Fail-Safe Fallback Recycler (When user hasn't approved new drafts, recycles previous approved poster with new caption)
-async function executeFailSafeRecycle(): Promise<PipelineItem | null> {
-  addLog('warn', 'META_PUBLISH', 'Fail-Safe Alert: No newly approved posts found in queue. Engaging smart re-captioning fallback...');
-
-  // Find previously approved or published item
-  const eligibleItem = pipelineItems.find(
-    i => i.creative && (i.stage === 'published' || i.stage === 'ready_approved' || i.stage === 'quality_approved')
-  );
-
-  if (!eligibleItem) {
-    addLog('error', 'META_PUBLISH', 'Fail-Safe Failed: No previous creative found to recycle.');
-    return null;
-  }
-
-  const product = catalogueProducts.find(p => p.id === eligibleItem.productId);
-  if (!product || product.stockStatus !== 'in_stock') {
-    addLog('warn', 'META_PUBLISH', 'Fail-safe candidate is out of stock. Skipping.');
-    return null;
-  }
-
-  // Generate a fresh caption with a new viral angle / hook
-  const hooks = [
-    'Customer Favorite Restock Alert',
-    'Back In High Demand This Weekend',
-    'Best Value Gadget Pick for 2026',
-    'Still In Stock — Fast Nationwide Delivery',
-  ];
-  const chosenHook = hooks[Math.floor(Math.random() * hooks.length)];
-
-  const analysis: AIAnalysisResult = {
-    ...(eligibleItem.aiAnalysis || ({} as any)),
-    angleToHighlight: chosenHook,
+// REAL Meta Graph API Publishing Engine (Facebook Page & Instagram Business)
+interface MetaPublishResult {
+  facebook: {
+    success: boolean;
+    postId?: string;
+    postUrl?: string;
+    error?: string;
   };
-
-  const freshCaption = await runGeminiCaptionGeneration(product, analysis, brandSettings);
-
-  const fbPostId = `fb_${Date.now()}`;
-  const igPostId = `ig_${Date.now()}`;
-
-  const recycledItem: PipelineItem = {
-    ...eligibleItem,
-    id: `pipe-recycled-${Date.now()}`,
-    caption: freshCaption,
-    stage: 'published',
-    isRecycled: true,
-    angleVariation: `Recycled: ${chosenHook}`,
-    originalItemId: eligibleItem.id,
-    updatedAt: new Date().toISOString(),
-    publishing: {
-      facebook: {
-        posted: true,
-        postId: fbPostId,
-        pageName: postingRules.metaFacebookPageName,
-        postUrl: `https://facebook.com/mrxshop/posts/${fbPostId}`,
-        timestamp: new Date().toISOString(),
-        metrics: { likes: Math.floor(Math.random() * 25) + 8, comments: 4, shares: 2 },
-      },
-      instagram: {
-        posted: true,
-        postId: igPostId,
-        accountHandle: postingRules.metaInstagramHandle,
-        postUrl: `https://instagram.com/p/${igPostId}`,
-        timestamp: new Date().toISOString(),
-        metrics: { likes: Math.floor(Math.random() * 35) + 12, comments: 5, saves: 6 },
-      },
-    },
+  instagram: {
+    success: boolean;
+    postId?: string;
+    postUrl?: string;
+    error?: string;
   };
-
-  pipelineItems.unshift(recycledItem);
-  addLog('success', 'META_PUBLISH', `Fail-Safe Success: Published "${product.name}" with fresh caption ("${chosenHook}")!`);
-  return recycledItem;
 }
 
-// Autonomous background loop with Buffer Pool & Fail-Safe Integration
+async function publishToMeta(item: PipelineItem): Promise<MetaPublishResult> {
+  const pageId = postingRules.metaFacebookPageId?.trim();
+  const pageToken = postingRules.metaFacebookPageToken?.trim();
+  const igAccountId = postingRules.metaInstagramAccountId?.trim();
+
+  const captionText = item.caption?.fullFormattedText || item.productName;
+  const imageUrl = item.creative?.generatedPosterUrl || item.heroImage;
+
+  const result: MetaPublishResult = {
+    facebook: { success: false },
+    instagram: { success: false },
+  };
+
+  // 1. Facebook Publishing
+  if (!pageId || !pageToken) {
+    result.facebook.error = 'Facebook Page ID or Page Access Token not configured in Settings.';
+    addLog('warn', 'META_PUBLISH', `Facebook Publish Notice: ${result.facebook.error}`);
+  } else {
+    try {
+      addLog('info', 'META_PUBLISH', `Contacting Meta Graph API to publish "${item.productName}" to Facebook Page ${postingRules.metaFacebookPageName || pageId}...`);
+      
+      const isPublicHttp = imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
+      let fbRes: Response;
+      if (isPublicHttp) {
+        fbRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: imageUrl,
+            caption: captionText,
+            access_token: pageToken,
+          }),
+        });
+      } else {
+        fbRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: captionText,
+            access_token: pageToken,
+          }),
+        });
+      }
+
+      const fbData = await fbRes.json();
+      if (!fbRes.ok || fbData.error) {
+        result.facebook.error = fbData.error?.message || `Meta API HTTP ${fbRes.status}: ${JSON.stringify(fbData)}`;
+        addLog('error', 'META_PUBLISH', `Facebook Graph API Error: ${result.facebook.error}`);
+      } else {
+        const publishedPostId = fbData.post_id || fbData.id;
+        result.facebook.success = true;
+        result.facebook.postId = publishedPostId;
+        result.facebook.postUrl = `https://facebook.com/${publishedPostId}`;
+        addLog('success', 'META_PUBLISH', `Real Facebook Post Published! ID: ${publishedPostId}`);
+      }
+    } catch (err: any) {
+      result.facebook.error = `Network/API connection failure: ${err.message}`;
+      addLog('error', 'META_PUBLISH', `Facebook publish failed: ${result.facebook.error}`);
+    }
+  }
+
+  // 2. Instagram Publishing (Independent of Facebook)
+  if (!igAccountId || !pageToken) {
+    result.instagram.error = 'Instagram Account ID or Page Access Token not configured in Settings.';
+    addLog('warn', 'META_PUBLISH', `Instagram Publish Notice: ${result.instagram.error}`);
+  } else {
+    try {
+      addLog('info', 'META_PUBLISH', `Contacting Meta Graph API to publish "${item.productName}" to Instagram Account ${igAccountId}...`);
+      
+      const isPublicHttp = imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
+      if (!isPublicHttp) {
+        result.instagram.error = 'Instagram requires a publicly accessible HTTPS image URL to create media container.';
+        addLog('warn', 'META_PUBLISH', `Instagram Publish: ${result.instagram.error}`);
+      } else {
+        // Step 1: Create IG Container
+        const containerRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_url: imageUrl,
+            caption: captionText,
+            access_token: pageToken,
+          }),
+        });
+        const containerData = await containerRes.json();
+        if (!containerRes.ok || containerData.error || !containerData.id) {
+          result.instagram.error = containerData.error?.message || `IG container creation failed: ${JSON.stringify(containerData)}`;
+          addLog('error', 'META_PUBLISH', `Instagram container error: ${result.instagram.error}`);
+        } else {
+          // Step 2: Publish Container
+          const publishRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media_publish`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              creation_id: containerData.id,
+              access_token: pageToken,
+            }),
+          });
+          const publishData = await publishRes.json();
+          if (!publishRes.ok || publishData.error || !publishData.id) {
+            result.instagram.error = publishData.error?.message || `IG media publish failed: ${JSON.stringify(publishData)}`;
+            addLog('error', 'META_PUBLISH', `Instagram publish error: ${result.instagram.error}`);
+          } else {
+            result.instagram.success = true;
+            result.instagram.postId = publishData.id;
+            result.instagram.postUrl = `https://instagram.com/p/${publishData.id}`;
+            addLog('success', 'META_PUBLISH', `Real Instagram Post Published! ID: ${publishData.id}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      result.instagram.error = `Network/API connection failure: ${err.message}`;
+      addLog('error', 'META_PUBLISH', `Instagram publish failed: ${result.instagram.error}`);
+    }
+  }
+
+  // Record history records (Separating content state from publication history!)
+  const now = new Date().toISOString();
+  
+  const fbRecord: PostHistoryRecord = {
+    id: `hist-fb-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    contentId: item.id,
+    productId: item.productId,
+    productName: item.productName,
+    platform: 'facebook',
+    status: result.facebook.success ? 'success' : 'failure',
+    timestamp: now,
+    platformPostId: result.facebook.postId,
+    postUrl: result.facebook.postUrl,
+    error: result.facebook.error,
+    captionSnippet: captionText.slice(0, 140),
+    imageUrl: item.heroImage,
+  };
+  publicationHistory.unshift(fbRecord);
+
+  const igRecord: PostHistoryRecord = {
+    id: `hist-ig-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    contentId: item.id,
+    productId: item.productId,
+    productName: item.productName,
+    platform: 'instagram',
+    status: result.instagram.success ? 'success' : 'failure',
+    timestamp: now,
+    platformPostId: result.instagram.postId,
+    postUrl: result.instagram.postUrl,
+    error: result.instagram.error,
+    captionSnippet: captionText.slice(0, 140),
+    imageUrl: item.heroImage,
+  };
+  publicationHistory.unshift(igRecord);
+
+  // Update Item publishing state strictly based on REAL Meta results
+  item.publishing.facebook = {
+    posted: result.facebook.success,
+    postId: result.facebook.postId,
+    postUrl: result.facebook.postUrl,
+    pageName: postingRules.metaFacebookPageName,
+    timestamp: result.facebook.success ? now : undefined,
+    metrics: item.publishing.facebook.metrics || { likes: 0, comments: 0, shares: 0 },
+    error: result.facebook.error,
+  };
+
+  item.publishing.instagram = {
+    posted: result.instagram.success,
+    postId: result.instagram.postId,
+    postUrl: result.instagram.postUrl,
+    accountHandle: postingRules.metaInstagramHandle,
+    timestamp: result.instagram.success ? now : undefined,
+    metrics: item.publishing.instagram.metrics || { likes: 0, comments: 0, saves: 0 },
+    error: result.instagram.error,
+  };
+
+  item.lastPlatformStatus = {
+    facebook: result.facebook.success ? 'success' : 'failure',
+    instagram: result.instagram.success ? 'success' : 'failure',
+  };
+
+  // Evergreen: Content remains Approved and Active, available for future scheduled publication
+  item.isApproved = true;
+  item.stage = 'ready_approved';
+  item.lastPublishedAt = now;
+  item.totalPublishedCount = (item.totalPublishedCount || 0) + (result.facebook.success || result.instagram.success ? 1 : 0);
+  item.updatedAt = now;
+
+  saveStateToDisk();
+
+  return result;
+}
+
+// Scheduled Evergreen Posting Cycle (Cloud Run compatible)
+async function executeEvergreenPostingCycle(forced: boolean = false): Promise<{
+  success: boolean;
+  message: string;
+  item?: PipelineItem;
+  metaResult?: MetaPublishResult;
+}> {
+  addLog('info', 'SCHEDULER', 'Executing scheduled evergreen posting cycle...');
+
+  // Check if daily limit reached (unless forced)
+  const today = new Date().toDateString();
+  const publishedToday = publicationHistory.filter(
+    h => h.status === 'success' && new Date(h.timestamp).toDateString() === today
+  ).length;
+
+  if (!forced && publishedToday >= postingRules.maxPostsPerDay) {
+    const msg = `Daily limit reached (${publishedToday}/${postingRules.maxPostsPerDay} posts). Scheduled cycle deferred.`;
+    addLog('info', 'SCHEDULER', msg);
+    return { success: true, message: msg };
+  }
+
+  // Auto-replenish draft reserve if low
+  await checkAndReplenishBufferPool();
+
+  // 1. Find all APPROVED & ACTIVE items
+  // Paused, rejected, deleted, or unapproved draft items must NEVER be selected!
+  const eligibleItems = pipelineItems.filter(
+    item =>
+      item.isApproved === true &&
+      !item.isPaused &&
+      item.stage !== 'quality_rejected'
+  );
+
+  if (eligibleItems.length === 0) {
+    const msg = 'No approved content in the Evergreen queue. Automatic posting requires user-approved content. Please review and approve drafts.';
+    addLog('warn', 'SCHEDULER', msg);
+    return { success: false, message: msg };
+  }
+
+  // 2. Evergreen Selection Algorithm:
+  // - Prefer products not posted recently
+  // - Avoid immediate repetition
+  // Sort: Items never published first (null lastPublishedAt), then oldest lastPublishedAt ascending
+  eligibleItems.sort((a, b) => {
+    if (!a.lastPublishedAt && b.lastPublishedAt) return -1;
+    if (a.lastPublishedAt && !b.lastPublishedAt) return 1;
+    if (!a.lastPublishedAt && !b.lastPublishedAt) return 0;
+    return new Date(a.lastPublishedAt!).getTime() - new Date(b.lastPublishedAt!).getTime();
+  });
+
+  const selectedItem = eligibleItems[0];
+
+  addLog('info', 'SCHEDULER', `Evergreen selection: "${selectedItem.productName}" (Published ${selectedItem.totalPublishedCount || 0} times, last published: ${selectedItem.lastPublishedAt || 'Never'}).`);
+
+  // 3. Publish to Meta
+  const metaResult = await publishToMeta(selectedItem);
+
+  // Update scheduler state
+  schedulerState.lastScheduledRun = new Date().toISOString();
+  schedulerState.totalRuns += 1;
+  const nextRunMs = Date.now() + (postingRules.autoIntervalMinutes || 30) * 60 * 1000;
+  schedulerState.nextScheduledRun = new Date(nextRunMs).toISOString();
+
+  saveStateToDisk();
+
+  return {
+    success: true,
+    message: `Evergreen posting cycle executed for "${selectedItem.productName}".`,
+    item: selectedItem,
+    metaResult,
+  };
+}
+
+// Autonomous background loop with Buffer Pool & Evergreen Integration
 let autonomousTimer: NodeJS.Timeout | null = null;
 function setupAutonomousLoop() {
   if (autonomousTimer) {
@@ -1633,52 +2003,7 @@ function setupAutonomousLoop() {
     const ms = Math.max(postingRules.autoIntervalMinutes, 5) * 60 * 1000;
     autonomousTimer = setInterval(async () => {
       try {
-        const today = new Date().toDateString();
-        const publishedToday = pipelineItems.filter(
-          item => item.stage === 'published' && new Date(item.updatedAt).toDateString() === today
-        ).length;
-
-        if (publishedToday >= postingRules.maxPostsPerDay) {
-          addLog('info', 'SYSTEM', `Daily posting limit reached (${publishedToday}/${postingRules.maxPostsPerDay}). Resting until next cycle.`);
-          return;
-        }
-
-        // Step 1: Check reserve pool and auto-replenish if <= 4
-        await checkAndReplenishBufferPool();
-
-        // Step 2: Look for an approved ready item
-        const readyItem = pipelineItems.find(
-          i => i.stage === 'ready_approved' || i.stage === 'quality_approved'
-        );
-
-        if (readyItem) {
-          // Publish the approved item!
-          const fbPostId = `fb_${Date.now()}`;
-          const igPostId = `ig_${Date.now()}`;
-
-          readyItem.stage = 'published';
-          readyItem.publishing.facebook = {
-            posted: true,
-            postId: fbPostId,
-            pageName: postingRules.metaFacebookPageName,
-            postUrl: `https://facebook.com/mrxshop/posts/${fbPostId}`,
-            timestamp: new Date().toISOString(),
-            metrics: { likes: Math.floor(Math.random() * 20) + 5, comments: 2, shares: 1 },
-          };
-          readyItem.publishing.instagram = {
-            posted: true,
-            postId: igPostId,
-            accountHandle: postingRules.metaInstagramHandle,
-            postUrl: `https://instagram.com/p/${igPostId}`,
-            timestamp: new Date().toISOString(),
-            metrics: { likes: Math.floor(Math.random() * 30) + 10, comments: 3, saves: 4 },
-          };
-          readyItem.updatedAt = new Date().toISOString();
-          addLog('success', 'META_PUBLISH', `Published approved post for "${readyItem.productName}"!`);
-        } else {
-          // Step 3: Fail-Safe! User hasn't approved new drafts yet, so recycle an older approved poster with fresh caption!
-          await executeFailSafeRecycle();
-        }
+        await executeEvergreenPostingCycle(false);
       } catch (err: any) {
         addLog('error', 'SYSTEM', `Autonomous loop execution error: ${err.message}`);
       }
@@ -1774,16 +2099,13 @@ Return strictly JSON array:
   }
 ]`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const text = await callGeminiSafe({
         contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        },
+        responseMimeType: 'application/json',
+        temperature: 0.7,
       });
 
-      const parsed = JSON.parse(response.text || '[]');
+      const parsed = JSON.parse(text || '[]');
       if (Array.isArray(parsed) && parsed.length > 0) {
         trendTopics = parsed.map((item, idx) => ({
           id: `trend-ai-${Date.now()}-${idx}`,
@@ -1866,61 +2188,9 @@ app.post('/api/supplier/sync', async (req, res) => {
 
 app.post('/api/pipeline/run-autopilot-cycle', async (req, res) => {
   try {
-    addLog('info', 'SYSTEM', '⚡ Auto-Pilot Cycle: Scanning live Badhons World stock and processing scheduled post...');
-
-    // 1. Ensure live inventory
-    if (catalogueProducts.length === 0) {
-      await syncFromBadhonsWorld();
-    }
-
-    // 2. Look for ready approved or draft item
-    let target: PipelineItem | null | undefined = pipelineItems.find(i => i.stage === 'ready_approved' || i.stage === 'quality_approved');
-    if (!target) {
-      target = pipelineItems.find(i => i.stage === 'draft_review');
-    }
-
-    if (!target) {
-      const unproc = catalogueProducts.find(p => p.stockStatus === 'in_stock' && !processedProductIds.has(p.id));
-      if (unproc) {
-        target = await executeAutonomousPipeline(unproc.id);
-      }
-    }
-
-    if (!target) {
-      return res.status(400).json({ success: false, message: 'No eligible product in stock.' });
-    }
-
-    // 3. Mark published & generate simulated/live Meta IDs
-    const fbPostId = `fb_${Date.now()}`;
-    const igPostId = `ig_${Date.now()}`;
-
-    target.stage = 'published';
-    target.publishing.facebook = {
-      posted: true,
-      postId: fbPostId,
-      pageName: postingRules.metaFacebookPageName,
-      postUrl: `https://facebook.com/mrxshop/posts/${fbPostId}`,
-      timestamp: new Date().toISOString(),
-      metrics: { likes: Math.floor(Math.random() * 25) + 8, comments: 3, shares: 1 },
-    };
-    target.publishing.instagram = {
-      posted: true,
-      postId: igPostId,
-      accountHandle: postingRules.metaInstagramHandle,
-      postUrl: `https://instagram.com/p/${igPostId}`,
-      timestamp: new Date().toISOString(),
-      metrics: { likes: Math.floor(Math.random() * 35) + 12, comments: 4, saves: 5 },
-    };
-    target.updatedAt = new Date().toISOString();
-    processedProductIds.add(target.productId);
-
-    addLog('success', 'META_PUBLISH', `অটো-পাইলট প্রকাশ সম্পন্ন: "${target.productName}" ফেসবুক ও ইনস্টাগ্রামে পোস্ট করা হয়েছে!`);
-
-    res.json({
-      success: true,
-      message: `"${target.productName}" সফলভাবে স্বয়ংক্রিয়ভাবে পাবলিশ হয়েছে!`,
-      item: target,
-    });
+    addLog('info', 'SYSTEM', '⚡ Auto-Pilot Cycle triggered: Running scheduled Evergreen post...');
+    const result = await executeEvergreenPostingCycle(true);
+    res.json(result);
   } catch (err: any) {
     addLog('error', 'SYSTEM', `Auto-Pilot Cycle failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
@@ -1934,7 +2204,7 @@ app.post('/api/pipeline/run-full', async (req, res) => {
     if (!item) {
       return res.status(400).json({
         success: false,
-        message: 'Could not run pipeline: All matching products are either processed, out of stock, or outside allowed rules.',
+        message: 'Could not generate poster: No matching in-stock products found.',
       });
     }
     res.json({ success: true, item });
@@ -1952,44 +2222,132 @@ app.post('/api/pipeline/action', async (req, res) => {
   }
 
   if (action === 'approve') {
+    item.isApproved = true;
+    item.isPaused = false;
     item.stage = 'ready_approved';
     item.updatedAt = new Date().toISOString();
-    addLog('success', 'QUALITY_GATE', `Approved draft poster for "${item.productName}" — Now in ready buffer for scheduled publishing.`);
-  } else if (action === 'approve_and_publish') {
-    const fbPostId = `fb_${Date.now()}`;
-    const igPostId = `ig_${Date.now()}`;
-    item.publishing.facebook = {
-      posted: true,
-      postId: fbPostId,
-      pageName: postingRules.metaFacebookPageName,
-      postUrl: `https://facebook.com/mrxshop/posts/${fbPostId}`,
-      timestamp: new Date().toISOString(),
-      metrics: { likes: 12, comments: 2, shares: 1 },
-    };
-    item.publishing.instagram = {
-      posted: true,
-      postId: igPostId,
-      accountHandle: postingRules.metaInstagramHandle,
-      postUrl: `https://instagram.com/p/${igPostId}`,
-      timestamp: new Date().toISOString(),
-      metrics: { likes: 18, comments: 3, saves: 2 },
-    };
-    item.stage = 'published';
+    saveStateToDisk();
+    addLog('success', 'QUALITY_GATE', `Approved "${item.productName}" — Now active in Evergreen buffer for scheduled posting.`);
+    return res.json({ success: true, item });
+  } else if (action === 'toggle_pause') {
+    item.isPaused = !item.isPaused;
     item.updatedAt = new Date().toISOString();
-    processedProductIds.add(item.productId);
-    processedProductIds.add(item.productUrl);
-    addLog('success', 'META_PUBLISH', `Manual approval: Published "${item.productName}" to Meta channels.`);
+    saveStateToDisk();
+    addLog('info', 'SYSTEM', `${item.isPaused ? 'Paused' : 'Resumed'} "${item.productName}" in Evergreen rotation.`);
+    return res.json({ success: true, item });
+  } else if (action === 'approve_and_publish' || action === 'publish') {
+    // If not approved, approve it first
+    item.isApproved = true;
+    item.isPaused = false;
+    item.stage = 'ready_approved';
+    
+    addLog('info', 'META_PUBLISH', `Publish requested for approved item "${item.productName}"...`);
+    const metaResult = await publishToMeta(item);
+    return res.json({ success: true, item, metaResult });
   } else if (action === 'reject') {
+    item.isApproved = false;
     item.stage = 'quality_rejected';
     item.errorLog = 'Manually rejected by store operator.';
     item.updatedAt = new Date().toISOString();
+    saveStateToDisk();
     addLog('warn', 'QUALITY_GATE', `Operator rejected "${item.productName}".`);
+    return res.json({ success: true, item });
   } else if (action === 'delete') {
     pipelineItems = pipelineItems.filter(p => p.id !== itemId);
+    saveStateToDisk();
     addLog('info', 'SYSTEM', `Removed item "${item.productName}" from queue.`);
+    return res.json({ success: true });
   }
 
   res.json({ success: true, item });
+});
+
+// Meta Graph API Connection Verification Endpoint
+app.post(['/api/meta/test', '/api/meta/test-connection'], async (req, res) => {
+  const { pageId, pageToken, igAccountId } = req.body;
+  const pId = (pageId || postingRules.metaFacebookPageId || '').trim();
+  const pToken = (pageToken || postingRules.metaFacebookPageToken || '').trim();
+  const igId = (igAccountId || postingRules.metaInstagramAccountId || '').trim();
+
+  if (!pId || !pToken) {
+    return res.json({
+      success: false,
+      error: 'Facebook Page ID and Page Access Token are required to test connection. Please provide valid Meta developer credentials.',
+    });
+  }
+
+  try {
+    const upstream = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(pId)}?fields=id,name,access_token,instagram_business_account&access_token=${encodeURIComponent(pToken)}`
+    );
+    const data = await upstream.json();
+
+    if (!upstream.ok || data.error) {
+      return res.json({
+        success: false,
+        error: data.error?.message || `Meta Graph API HTTP ${upstream.status}`,
+      });
+    }
+
+    postingRules.metaConnected = true;
+    if (data.name) postingRules.metaFacebookPageName = data.name;
+    if (data.instagram_business_account?.id) {
+      postingRules.metaInstagramAccountId = data.instagram_business_account.id;
+    }
+    saveStateToDisk();
+
+    return res.json({
+      success: true,
+      pageName: data.name,
+      pageId: data.id,
+      igConnected: Boolean(data.instagram_business_account?.id),
+      message: `Meta Graph API Connected! Page: "${data.name}" (ID: ${data.id})${data.instagram_business_account?.id ? ' with Instagram Business account linked.' : ''}`,
+    });
+  } catch (err: any) {
+    return res.json({
+      success: false,
+      error: `Meta connection network failure: ${err.message}`,
+    });
+  }
+});
+
+// Publication History Endpoint
+app.get('/api/publication-history', (req, res) => {
+  res.json({
+    success: true,
+    history: publicationHistory,
+  });
+});
+
+// Dedicated Cloud Run Scheduled Trigger Endpoints
+app.post('/api/cron/trigger', async (req, res) => {
+  try {
+    const forced = Boolean(req.body.forced);
+    const result = await executeEvergreenPostingCycle(forced);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/cron/trigger', async (req, res) => {
+  try {
+    const forced = req.query.forced === 'true';
+    const result = await executeEvergreenPostingCycle(forced);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/cron/status', (req, res) => {
+  res.json({
+    autonomousEnabled: postingRules.autonomousEnabled,
+    lastScheduledRun: schedulerState.lastScheduledRun,
+    nextScheduledRun: schedulerState.nextScheduledRun,
+    totalRuns: schedulerState.totalRuns,
+    cronEndpoint: '/api/cron/trigger',
+  });
 });
 
 // Buffer Pool API Endpoints
@@ -2038,11 +2396,11 @@ app.post('/api/buffer-pool/approve-all', (req, res) => {
 
 app.post('/api/buffer-pool/test-fail-safe', async (req, res) => {
   try {
-    const recycled = await executeFailSafeRecycle();
-    if (!recycled) {
-      return res.status(400).json({ success: false, message: 'No eligible approved poster found to recycle.' });
+    const cycle = await executeEvergreenPostingCycle(true);
+    if (!cycle.success || !cycle.item) {
+      return res.status(400).json({ success: false, message: cycle.message || 'No eligible approved poster found to cycle.' });
     }
-    res.json({ success: true, item: recycled });
+    res.json({ success: true, item: cycle.item });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

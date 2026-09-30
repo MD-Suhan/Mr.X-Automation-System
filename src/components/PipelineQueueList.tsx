@@ -13,6 +13,9 @@ import {
   Instagram,
   Clock,
   Send,
+  Pause,
+  Play,
+  RotateCcw,
 } from 'lucide-react';
 import type { PipelineItem } from '../types/index.ts';
 
@@ -21,6 +24,7 @@ interface PipelineQueueListProps {
   onOpenStudio: (item: PipelineItem) => void;
   onQuickApprove?: (itemId: string) => void;
   onApproveAndPublish: (itemId: string) => void;
+  onTogglePause?: (itemId: string) => void;
   onReject: (itemId: string) => void;
   onDelete: (itemId: string) => void;
 }
@@ -30,24 +34,26 @@ export const PipelineQueueList: React.FC<PipelineQueueListProps> = ({
   onOpenStudio,
   onQuickApprove,
   onApproveAndPublish,
+  onTogglePause,
   onReject,
   onDelete,
 }) => {
-  const [filter, setFilter] = useState<'all' | 'drafts' | 'approved' | 'published' | 'recycled'>('all');
+  const [filter, setFilter] = useState<'all' | 'drafts' | 'approved' | 'published'>('all');
 
-  const draftCount = items.filter((i) => i.stage === 'draft_review').length;
-  const approvedCount = items.filter(
-    (i) => i.stage === 'ready_approved' || i.stage === 'quality_approved'
+  const draftCount = items.filter((i) => !i.isApproved && i.stage !== 'quality_rejected').length;
+  const approvedCount = items.filter((i) => i.isApproved || i.stage === 'ready_approved').length;
+  const publishedCount = items.filter(
+    (i) => (i.totalPublishedCount && i.totalPublishedCount > 0) || i.publishing.facebook.posted || i.publishing.instagram.posted
   ).length;
-  const publishedCount = items.filter((i) => i.stage === 'published').length;
-  const recycledCount = items.filter((i) => i.isRecycled).length;
 
   const filteredItems = items.filter((item) => {
-    if (filter === 'drafts') return item.stage === 'draft_review';
-    if (filter === 'approved')
-      return item.stage === 'ready_approved' || item.stage === 'quality_approved';
-    if (filter === 'published') return item.stage === 'published';
-    if (filter === 'recycled') return item.isRecycled;
+    const isItemApproved = item.isApproved || item.stage === 'ready_approved';
+    const isItemDraft = !item.isApproved && item.stage !== 'quality_rejected';
+    const isItemPublished = (item.totalPublishedCount && item.totalPublishedCount > 0) || item.publishing.facebook.posted || item.publishing.instagram.posted;
+
+    if (filter === 'drafts') return isItemDraft;
+    if (filter === 'approved') return isItemApproved;
+    if (filter === 'published') return isItemPublished;
     return true;
   });
 
@@ -106,18 +112,6 @@ export const PipelineQueueList: React.FC<PipelineQueueListProps> = ({
           >
             Published ({publishedCount})
           </button>
-          {recycledCount > 0 && (
-            <button
-              onClick={() => setFilter('recycled')}
-              className={`shrink-0 px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
-                filter === 'recycled'
-                  ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Recycled ({recycledCount})
-            </button>
-          )}
         </div>
       </div>
 
@@ -133,12 +127,15 @@ export const PipelineQueueList: React.FC<PipelineQueueListProps> = ({
       ) : (
         <div className="divide-y divide-slate-100">
           {filteredItems.map((item) => {
-            const isPublished = item.stage === 'published';
-            const isApproved =
-              item.stage === 'ready_approved' || item.stage === 'quality_approved';
-            const isDraft = item.stage === 'draft_review';
+            const isApproved = Boolean(item.isApproved || item.stage === 'ready_approved');
+            const isDraft = !item.isApproved && item.stage !== 'quality_rejected';
+            const isPaused = Boolean(item.isPaused);
             const isRejected = item.stage === 'quality_rejected';
-            const isRecycled = !!item.isRecycled;
+            const hasPublished = Boolean(
+              (item.totalPublishedCount && item.totalPublishedCount > 0) ||
+                item.publishing.facebook.posted ||
+                item.publishing.instagram.posted
+            );
 
             return (
               <div
@@ -165,9 +162,14 @@ export const PipelineQueueList: React.FC<PipelineQueueListProps> = ({
                       <span className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">
                         {item.productName}
                       </span>
-                      {isRecycled && (
-                        <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                          ♻️ Recycled
+                      {hasPublished && (
+                        <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          📢 Published ({item.totalPublishedCount || 1}x)
+                        </span>
+                      )}
+                      {isPaused && (
+                        <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                          ⏸️ Paused
                         </span>
                       )}
                     </div>
@@ -181,38 +183,48 @@ export const PipelineQueueList: React.FC<PipelineQueueListProps> = ({
                       <span className="text-emerald-600 font-medium">In Stock</span>
                     </div>
 
-                    {/* Direct Supplier Source Product Link */}
+                    {/* Direct Badhons World Source of Truth Link */}
                     {item.productUrl && (
-                      <div className="mt-1 flex items-center">
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
                         <a
                           href={item.productUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200/70 px-2 py-0.5 rounded transition-colors"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors"
                           title="Open original Badhons World product page to verify specs and photos before approving"
                         >
                           <ExternalLink className="w-3 h-3 shrink-0" />
-                          <span>🔗 Source: badhonsworld.com</span>
+                          <span>Source of Truth: badhonsworld.com</span>
                         </a>
+                        {item.images && item.images.length > 0 && (
+                          <span className="text-[10px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded">
+                            {item.images.length} Badhons World Reference Photos
+                          </span>
+                        )}
                       </div>
                     )}
 
-                    {/* Stage Status and Publication Tag */}
-                    <div className="mt-1.5 flex items-center gap-2 text-[11px] sm:text-xs">
-                      {isPublished ? (
-                        <div className="flex items-center gap-1 text-emerald-600 font-semibold">
-                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                          <span>Published to FB & IG</span>
+                    {/* Stage Status and Evergreen State */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
+                      {isPaused ? (
+                        <div className="flex items-center gap-1 text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          <Pause className="w-3 h-3 shrink-0" />
+                          <span>Paused (Excluded from Evergreen auto-posting)</span>
                         </div>
                       ) : isApproved ? (
-                        <div className="flex items-center gap-1 text-emerald-600 font-semibold">
-                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                          <span>Approved & Scheduled</span>
+                        <div className="flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                          <span>Approved & Active (Evergreen pool)</span>
+                          {item.lastPublishedAt && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              · Last posted {new Date(item.lastPublishedAt).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
                       ) : isDraft ? (
                         <div className="flex items-center gap-1 text-amber-600 font-semibold">
                           <Clock className="w-3.5 h-3.5 shrink-0" />
-                          <span>Draft Review Needed</span>
+                          <span>Draft Review Needed (Not approved)</span>
                         </div>
                       ) : isRejected ? (
                         <div className="flex items-center gap-1 text-rose-600 font-medium">
@@ -239,33 +251,51 @@ export const PipelineQueueList: React.FC<PipelineQueueListProps> = ({
                     <span>View Studio</span>
                   </button>
 
+                  {/* Draft Items: ONLY show Approve button. NEVER allow direct publish! */}
                   {isDraft && onQuickApprove && (
                     <button
                       onClick={() => onQuickApprove(item.id)}
                       className="flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-semibold px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg transition-colors shadow-xs cursor-pointer"
-                      title="Approve this poster into the scheduled posting buffer"
+                      title="Approve this poster into the Evergreen scheduled buffer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Approve</span>
                     </button>
                   )}
 
-                  {(isApproved || isDraft) && (
-                    <button
-                      onClick={() => onApproveAndPublish(item.id)}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-semibold px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg transition-colors shadow-xs cursor-pointer"
-                      title="Publish immediately to Facebook Page & Instagram"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                      <span>Publish</span>
-                    </button>
+                  {/* Approved Items: Can publish to Meta, or Toggle Pause */}
+                  {isApproved && (
+                    <>
+                      <button
+                        onClick={() => onApproveAndPublish(item.id)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-semibold px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg transition-colors shadow-xs cursor-pointer"
+                        title="Publish this approved item to Facebook Page & Instagram"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>Publish Now</span>
+                      </button>
+
+                      {onTogglePause && (
+                        <button
+                          onClick={() => onTogglePause(item.id)}
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                            isPaused
+                              ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                              : 'text-slate-500 border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title={isPaused ? 'Resume Evergreen posting' : 'Pause from Evergreen posting'}
+                        >
+                          {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </>
                   )}
 
-                  {!isPublished && !isRejected && (
+                  {!isRejected && (
                     <button
                       onClick={() => onReject(item.id)}
                       className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer shrink-0"
-                      title="Reject from posting"
+                      title="Reject from Evergreen buffer"
                     >
                       <XCircle className="w-4 h-4" />
                     </button>

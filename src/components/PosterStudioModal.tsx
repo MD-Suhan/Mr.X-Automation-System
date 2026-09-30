@@ -24,6 +24,7 @@ interface PosterStudioModalProps {
   brandSettings: BrandSettings;
   postingRules: PostingRules;
   onClose: () => void;
+  onApprove?: (itemId: string) => Promise<void>;
   onPublish: (itemId: string) => Promise<void>;
   onRegenerate: (itemId: string, theme?: string) => Promise<void>;
 }
@@ -43,229 +44,55 @@ interface DynamicPosterData {
 }
 
 function resolveProductPosterData(item: PipelineItem): DynamicPosterData {
-  const cat = (item.category || '').toLowerCase();
-  const name = item.productName || '';
-  const nameLower = name.toLowerCase();
+  const cat = (item.category || '').trim();
+  const name = (item.productName || '').trim();
 
-  // ONIKUMA Gaming Headsets (e.g. K19)
-  if (nameLower.includes('k19') || nameLower.includes('onikuma') || (nameLower.includes('headset') && nameLower.includes('gaming'))) {
-    return {
-      kicker: 'PRO GAMING AUDIO  •  7.1 SURROUND',
-      headline: nameLower.includes('k19') ? 'ONIKUMA K19' : name.split(' ').slice(0, 3).join(' '),
-      subtitle: 'Pro RGB Gaming Headset',
-      badge: '7.1 RGB',
-      supportingLine: '40mm Neodymium Drivers  |  Noise-Canceling Mic  |  RGB Glow',
-      features: [
-        { icon: '🎧', title: 'Surround Bass', desc: '40mm Neodymium Drivers' },
-        { icon: '🎙️', title: 'Noise-Free Mic', desc: 'Rotatable Clear Comms' },
-        { icon: '🌈', title: 'RGB Lighting', desc: 'Dynamic Battle Glow' },
-        { icon: '☁️', title: 'Memory Foam', desc: 'All-Day Comfy Cushion' },
-      ],
-      scriptWhite: 'Game With',
-      scriptBlue: 'Power',
-      bottomBarText: '🎮  7.1 SURROUND  |  NOISE-CANCELING MIC  |  RGB GLOW',
-      daylightHeadline: 'ONIKUMA / K19',
-      daylightSubtitle: 'PRO GAMING HEADSET',
-    };
-  }
+  // Extract clean headline: up to first 3 words or short model
+  const nameWords = name.split(/\s+/);
+  const headline = nameWords.slice(0, 3).join(' ');
 
-  // QIF Fast Charging Power Banks (e.g. QY-45, QY-54)
-  if (nameLower.includes('qy-45') || nameLower.includes('qy-54') || (nameLower.includes('qif') && nameLower.includes('power bank'))) {
-    return {
-      kicker: '100W SUPER PD  •  FAST CHARGING',
-      headline: nameLower.includes('qy-45') ? 'QIF QY-45' : name.split(' ').slice(0, 2).join(' '),
-      subtitle: '10000mAh PD Fast Charge Power Bank',
-      badge: '100W PD',
-      supportingLine: 'Digital Display  |  Built-in Type-C Cable  |  Compact Portability',
-      features: [
-        { icon: '⚡', title: '100W PD Charge', desc: 'Ultra-Fast Two-Way PD' },
-        { icon: '🔋', title: '10,000mAh', desc: 'High-Density Lithium Cell' },
-        { icon: '💡', title: 'Digital Screen', desc: 'Exact Battery % Level' },
-        { icon: '🪢', title: 'Built-in Cable', desc: 'Lanyard Hand Strap' },
-      ],
-      scriptWhite: 'Power In',
-      scriptBlue: 'Your Pocket',
-      bottomBarText: '⚡  100W PD CHARGE  |  10000mAh  |  DIGITAL DISPLAY',
-      daylightHeadline: '10000mAh / PD',
-      daylightSubtitle: 'FAST CHARGING POWER BANK',
-    };
-  }
+  // Verified specs from title / description (NO invented numbers!)
+  const text = `${name} ${item.aiAnalysis?.productSummary || ''}`;
+  let badge = 'OFFICIAL';
+  const battMatch = text.match(/\b\d+[\d,]*\s*mah\b/i);
+  const wattMatch = text.match(/\b\d+\s*w(?:att)?\b|\bpd\b/i);
+  const ancMatch = text.match(/\banc\b|\benc\b/i);
+  const dispMatch = text.match(/\bamoled\b|\blcd\b|\bips\b/i);
 
-  if (cat.includes('earbud') || cat.includes('tws') || cat.includes('headphone') || cat.includes('audio')) {
-    return {
-      kicker: 'SMARTER SOUND  •  MORE CONTROL',
-      headline: name.includes('A9 Pro') ? 'A9 Pro' : name.split(' ').slice(0, 3).join(' '),
-      subtitle: 'ANC/ENC Wireless Earbuds',
-      badge: 'E0482',
-      supportingLine: 'Premium Sound  |  Smart Features  |  Everyday Vibes',
-      features: [
-        { icon: '📶', title: 'ANC + ENC', desc: 'Clear Calls & Music' },
-        { icon: '👆', title: 'Smart Touch', desc: 'LCD Screen Control' },
-        { icon: '🔄', title: 'Surround 360°', desc: 'Immersive Audio' },
-        { icon: '⚡', title: 'Fast Charging', desc: 'Type-C Endurance' },
-      ],
-      scriptWhite: 'Your Music',
-      scriptBlue: 'Your Way',
-      bottomBarText: '📊  ANC/ENC  |  SMART SCREEN  |  PREMIUM SOUND',
-      daylightHeadline: 'ANC / ENC',
-      daylightSubtitle: 'WIRELESS EARBUDS',
-    };
-  }
+  if (battMatch) badge = battMatch[0].toUpperCase();
+  else if (wattMatch) badge = wattMatch[0].toUpperCase();
+  else if (ancMatch) badge = ancMatch[0].toUpperCase();
+  else if (dispMatch) badge = dispMatch[0].toUpperCase();
 
-  if (cat.includes('power') || cat.includes('bank') || cat.includes('charger') || cat.includes('battery')) {
-    return {
-      kicker: 'NEXT-GEN POWER  •  COMPACT DESIGN',
-      headline: name.includes('Cyberpunk') ? 'Cyberpunk' : name.split(' ').slice(0, 2).join(' '),
-      subtitle: '22.5W Magnetic Wireless Power Bank',
-      badge: '22.5W',
-      supportingLine: 'MagSafe Snap  |  High Speed PD  |  Airline Safe',
-      features: [
-        { icon: '⚡', title: '22.5W Fast', desc: 'Two-Way PD Charging' },
-        { icon: '🧲', title: 'MagSafe Snap', desc: '15W Magnetic Wireless' },
-        { icon: '🔋', title: '10,000mAh', desc: 'High-Density Lithium' },
-        { icon: '💡', title: 'LED Display', desc: 'Real-Time Battery %' },
-      ],
-      scriptWhite: 'Power In',
-      scriptBlue: 'Your Pocket',
-      bottomBarText: '⚡  22.5W PD  |  15W MAGSAFE  |  DIGITAL DISPLAY',
-      daylightHeadline: '22.5W / MAGSAFE',
-      daylightSubtitle: 'WIRELESS POWER BANK',
-    };
-  }
-
-  if (cat.includes('watch') || cat.includes('smartwatch') || cat.includes('band')) {
-    return {
-      kicker: 'SMART TRACKING  •  ALL-DAY ACTIVE',
-      headline: name.includes('HK9') ? 'HK9 Ultra 2' : name.split(' ').slice(0, 3).join(' '),
-      subtitle: '2.12" AMOLED Smartwatch',
-      badge: 'AMOLED',
-      supportingLine: 'Always-On Display  |  AI Assistant  |  Titanium Case',
-      features: [
-        { icon: '📱', title: '2.12" AMOLED', desc: '60Hz High Refresh' },
-        { icon: '👆', title: 'Smart Gesture', desc: 'Double-Tap Calling' },
-        { icon: '📞', title: 'BT Calling', desc: 'Bangla Font Support' },
-        { icon: '❤️', title: 'Health Suite', desc: 'Heart & Sleep Tracking' },
-      ],
-      scriptWhite: 'Style Your',
-      scriptBlue: 'Time',
-      bottomBarText: '⌚  60Hz AMOLED  |  BT CALLING  |  TITANIUM CASE',
-      daylightHeadline: 'AMOLED / ULTRA',
-      daylightSubtitle: 'SMARTWATCH EDITION',
-    };
-  }
-
-  if (cat.includes('speaker') || cat.includes('sound')) {
-    return {
-      kicker: 'IMMERSIVE SOUND  •  HEAVY BASS',
-      headline: name.includes('PulseBlast') ? 'PulseBlast' : name.split(' ').slice(0, 2).join(' '),
-      subtitle: '360° Heavy Bass Mini Speaker',
-      badge: 'IPX7',
-      supportingLine: 'Dynamic RGB Lights  |  Dual Passive Radiator  |  TWS Pair',
-      features: [
-        { icon: '🔊', title: '15W Peak Bass', desc: 'Dual Passive Radiators' },
-        { icon: '🌈', title: 'Dynamic RGB', desc: 'Beat-Synced Lights' },
-        { icon: '💧', title: 'IPX7 Waterproof', desc: 'Drop-Resistant Silicone' },
-        { icon: '🔋', title: '12H Playtime', desc: '2600mAh Endurance' },
-      ],
-      scriptWhite: 'Feel The',
-      scriptBlue: 'Beat',
-      bottomBarText: '🎵  360° SURROUND  |  RGB BEATS  |  IPX7 WATERPROOF',
-      daylightHeadline: 'IPX7 / BASS',
-      daylightSubtitle: 'PORTABLE BLUETOOTH SPEAKER',
-    };
-  }
-
-  if (cat.includes('gimbal') || cat.includes('camera') || cat.includes('stabilizer')) {
-    return {
-      kicker: 'CINEMA STABILIZATION  •  AUTO TRACKING',
-      headline: name.includes('3-Axis') ? 'Smart 3-Axis' : name.split(' ').slice(0, 2).join(' '),
-      subtitle: 'AI Face Tracking Foldable Gimbal',
-      badge: '3-AXIS',
-      supportingLine: 'Optical AI Vision  |  Magnetic Fill Light  |  Foldable',
-      features: [
-        { icon: '🎯', title: 'AI Tracking', desc: 'Standalone Sensor 360°' },
-        { icon: '💡', title: '3-Color Light', desc: 'Magnetic Fill Lamp' },
-        { icon: '📐', title: '3-Axis Motor', desc: 'Inception & Zoom Modes' },
-        { icon: '🔋', title: '10H Runtime', desc: 'Reverse Phone Charging' },
-      ],
-      scriptWhite: 'Create Like',
-      scriptBlue: 'A Pro',
-      bottomBarText: '🎬  3-AXIS GIMBAL  |  AI TRACKING  |  FILL LIGHT',
-      daylightHeadline: '3-AXIS / AI',
-      daylightSubtitle: 'PHONE GIMBAL STABILIZER',
-    };
-  }
-
-  // Smart Drones, Mobile Coolers, Cameras, Gaming Peripherals
-  if (cat.includes('drone') || name.toLowerCase().includes('drone')) {
-    return {
-      kicker: '4K AERIAL VISION  •  ALTITUDE HOVER',
-      headline: name.split(' ').slice(0, 3).join(' '),
-      subtitle: '4K Ultra HD Dual Camera Drone',
-      badge: '4K DUAL',
-      supportingLine: 'Optical Flow Hover  |  WiFi FPV Live  |  360° Flips',
-      features: [
-        { icon: '📷', title: '4K Dual Cam', desc: '90° Adjustable View' },
-        { icon: '🚁', title: 'Optical Flow', desc: 'Rock-Solid Auto Hover' },
-        { icon: '📱', title: 'WiFi FPV', desc: 'Real-Time Phone Feed' },
-        { icon: '⚡', title: 'Modular Batt', desc: 'Extended Flight Time' },
-      ],
-      scriptWhite: 'Fly High',
-      scriptBlue: 'Capture All',
-      bottomBarText: '🚁  4K DUAL CAMERA  |  OPTICAL HOVER  |  WIFI FPV',
-      daylightHeadline: '4K / DUAL CAM',
-      daylightSubtitle: 'PRO AERIAL DRONE',
-    };
-  }
-
-  if (cat.includes('cooler') || name.toLowerCase().includes('cooler')) {
-    return {
-      kicker: 'INSTANT FREEZE  •  NO OVERHEATING',
-      headline: name.split(' ').slice(0, 2).join(' '),
-      subtitle: 'Semiconductor Mobile Gaming Cooler',
-      badge: 'ICE COLD',
-      supportingLine: 'Dual Peltier Chip  |  Silent Turbofan  |  RGB Gaming',
-      features: [
-        { icon: '❄️', title: 'Rapid Cool', desc: 'Drops Temp in 3 Secs' },
-        { icon: '🎮', title: 'Esports Ready', desc: 'Zero Frame Drop' },
-        { icon: '🔇', title: 'Silent Fan', desc: 'Ultra-Quiet Operation' },
-        { icon: '🌈', title: 'RGB Lighting', desc: 'Dynamic Mecha Glow' },
-      ],
-      scriptWhite: 'Play Cool',
-      scriptBlue: 'Win More',
-      bottomBarText: '❄️  SEMICONDUCTOR CHIP  |  RGB LIGHTS  |  SILENT FAN',
-      daylightHeadline: 'ICE / COOLER',
-      daylightSubtitle: 'MOBILE GAMING FAN',
-    };
-  }
-
-  // Fallback for gaming accessories or other categories
+  // Verified key features from AI analysis or real specs
   const rawKeyPts = (item.aiAnalysis?.keySellingPoints || []).filter(
     (pt) => !pt.toLowerCase().includes('badhon') && !pt.includes('সাপ্লায়ার') && !pt.includes('স্টক')
   );
-  const keyPts = rawKeyPts.length >= 4 ? rawKeyPts : [
-    'Premium Build',
-    'High Performance',
-    'Certified Quality',
-    'Extended Endurance'
+
+  const keyPts = rawKeyPts.length > 0 ? rawKeyPts : [
+    'Authentic Reseller Stock',
+    'Tested & Verified Quality',
+    '100% Genuine Device',
   ];
+
+  const features = [
+    { icon: '✨', title: keyPts[0]?.slice(0, 18) || 'Authentic Stock', desc: 'Verified by Mr.X Shop' },
+    { icon: '⚡', title: keyPts[1]?.slice(0, 18) || 'Official Quality', desc: 'Genuine Components' },
+    { icon: '🛡️', title: keyPts[2]?.slice(0, 18) || 'Tested Device', desc: 'Pre-Shipment Checked' },
+  ];
+
   return {
-    kicker: 'PREMIUM QUALITY  •  TREND TECH',
-    headline: name.split(' ').slice(0, 3).join(' '),
-    subtitle: `${item.category} Official Edition`,
-    badge: 'PRO',
-    supportingLine: 'Official Reseller  |  Authentic Stock  |  Warranty',
-    features: [
-      { icon: '✨', title: keyPts[0]?.slice(0, 16) || 'Premium Build', desc: 'Engineered for Performance' },
-      { icon: '⚡', title: keyPts[1]?.slice(0, 16) || 'Fast Response', desc: 'Low Latency & High Speed' },
-      { icon: '🛡️', title: keyPts[2]?.slice(0, 16) || 'Official Quality', desc: 'Certified Components' },
-      { icon: '🔋', title: keyPts[3]?.slice(0, 16) || 'Durable Life', desc: 'Extended Battery Backup' },
-    ],
-    scriptWhite: 'Smart Life',
-    scriptBlue: 'Better Tech',
-    bottomBarText: `✨  ${item.category.toUpperCase()}  |  GENUINE QUALITY  |  OFFICIAL RESELLER`,
-    daylightHeadline: `${item.category.toUpperCase()} / PRO`,
-    daylightSubtitle: 'OFFICIAL RESELLER EDITION',
+    kicker: 'AUTHENTIC TECH  •  OFFICIAL RESELLER',
+    headline,
+    subtitle: `${cat || 'Smart Gadget'} Official Edition`,
+    badge,
+    supportingLine: 'Verified Quality  |  Authentic Reseller  |  Cash on Delivery',
+    features,
+    scriptWhite: 'Smart Choice',
+    scriptBlue: 'Mr.X Shop',
+    bottomBarText: `✨  ${(cat || 'SMART GADGET').toUpperCase()}  |  AUTHENTIC QUALITY  |  OFFICIAL RESELLER`,
+    daylightHeadline: `${headline.toUpperCase()}`,
+    daylightSubtitle: `${(cat || 'OFFICIAL EDITION').toUpperCase()}`,
   };
 }
 
@@ -274,6 +101,7 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
   brandSettings,
   postingRules,
   onClose,
+  onApprove,
   onPublish,
   onRegenerate,
 }) => {
@@ -342,6 +170,24 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
 
   // Complete Master Prompt JSON matching the user's exact specification
   const promptJson = {
+    product_data_source: {
+      source_of_truth: "Badhons World (badhonsworld.com) Reseller Catalog",
+      source_product_url: item.productUrl,
+      supplier_name: item.supplier,
+      category: item.category,
+      available_reference_images_count: images.length,
+      rules: [
+        "Product name, all available product images, description and available product information must come from Badhons World.",
+        "Badhons World is the strict SOURCE OF TRUTH for product data.",
+        "Do NOT replace Badhons World product data with random web-search results or AI-invented product information.",
+        "Collect and use all available product images from the Badhons World product page as visual references when possible, not only the main image.",
+        "Badhons World product images are REFERENCE IMAGES ONLY, not the final poster image.",
+        "NEVER paste or overlay the original rectangular product photo or its original background into the poster.",
+        "Generate the actual physical product naturally inside a new cinematic advertising scene while preserving its real appearance, shape, proportions, colors, materials, branding and visible details.",
+        "Product description/caption must be based on the actual Badhons World product information.",
+        "If required information is missing from Badhons World, do not invent it; leave it out or flag it for review."
+      ]
+    },
     product_name: item.productName,
     product_description: {
       content: item.aiAnalysis?.productSummary || item.productName,
@@ -590,106 +436,100 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
     final_instruction: "First visually inspect ALL uploaded images and identify their roles. Determine which image is the separate Mr.X Shop logo and which images are product references based on their visual content, not upload order. Treat every non-logo product-related image as a product reference and use ALL product reference images together as different views or references of the SAME product. Read and understand the entire product description, even if it is very long or written in Bangla, English, Banglish or mixed language. Use the description as the factual source for specifications, features, functions, benefits and selling points. Do not invent or assume unsupported information. Do not place the entire description on the poster; select only a few important and accurate points. For the actual product appearance, always follow the provided product reference images. Treat the identified Mr.X Shop logo image as the ONLY valid source for the Mr.X Shop logo. Remove ONLY its original background and place the EXACT original logo into the poster. Never recreate, redraw, redesign, approximate, replace or omit the provided logo. Create a premium, photorealistic, cinematic 1:1 advertising poster where the product remains the hero element. Build all creativity around the environment, lighting, atmosphere, effects and composition while keeping both the actual product and provided Mr.X Shop logo visually faithful to their reference images. After generating the poster, provide a separate modern, minimalistic, copy-paste-ready social media caption using the product name and accurate information from the product description. The caption must show the official Mr.X Shop WhatsApp contact as the plain number 01822300348 only, never as a wa.me link, followed by the official website https://mrxshopbd.web.app and relevant product-specific hashtags."
   };
 
-  // Helper: Draw authentic Mr.X Shop Logo on Canvas
-  const drawMrXLogo = (ctx: CanvasRenderingContext2D, x: number, y: number, isDarkTheme: boolean) => {
-    ctx.save();
-    ctx.translate(x, y);
+  // Helper: Background isolation & product segmentation (Removes raw photo background box)
+  const isolateProductSubject = (img: HTMLImageElement): HTMLCanvasElement => {
+    const off = document.createElement('canvas');
+    off.width = img.naturalWidth || img.width || 600;
+    off.height = img.naturalHeight || img.height || 600;
+    const offCtx = off.getContext('2d', { willReadFrequently: true });
+    if (!offCtx) return off;
 
-    // "Mr." in brush italic font
-    ctx.font = 'italic 900 48px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = isDarkTheme ? '#ffffff' : '#0f172a';
-    ctx.textAlign = 'right';
-    ctx.fillText('Mr.', -24, 0);
+    offCtx.drawImage(img, 0, 0, off.width, off.height);
+    try {
+      const imgData = offCtx.getImageData(0, 0, off.width, off.height);
+      const d = imgData.data;
+      const w = off.width;
+      const h = off.height;
 
-    // Dynamic Brush 'X' in vibrant cyan/electric blue
-    ctx.strokeStyle = '#0088ff';
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-16, -34);
-    ctx.lineTo(24, 6);
-    ctx.stroke();
+      // Sample along all 4 perimeter borders to accurately identify the background
+      const borderSamples: Array<[number, number]> = [];
+      const stepX = Math.max(1, Math.floor(w / 32));
+      const stepY = Math.max(1, Math.floor(h / 32));
 
-    ctx.beginPath();
-    ctx.moveTo(24, -34);
-    ctx.lineTo(-16, 6);
-    ctx.stroke();
+      for (let x = 0; x < w; x += stepX) {
+        borderSamples.push([x, 1], [x, 2], [x, h - 2], [x, h - 3]);
+      }
+      for (let y = 0; y < h; y += stepY) {
+        borderSamples.push([1, y], [2, y], [w - 2, y], [w - 3, y]);
+      }
 
-    // Secondary blue highlight stroke for hand-painted brush effect
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(-12, -30);
-    ctx.lineTo(20, 2);
-    ctx.stroke();
+      let bgR = 0, bgG = 0, bgB = 0, sampleCount = 0;
+      for (const [sx, sy] of borderSamples) {
+        if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+          const idx = (sy * w + sx) * 4;
+          bgR += d[idx];
+          bgG += d[idx + 1];
+          bgB += d[idx + 2];
+          sampleCount++;
+        }
+      }
+      if (sampleCount > 0) {
+        bgR /= sampleCount;
+        bgG /= sampleCount;
+        bgB /= sampleCount;
+      }
 
-    // Divider line with "— S H O P —"
-    const textColor = isDarkTheme ? '#ffffff' : '#0f172a';
-    ctx.textAlign = 'center';
-    ctx.font = '800 16px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = textColor;
-    ctx.fillText('—  S H O P  —', 0, 24);
+      const avgLuminance = (bgR + bgG + bgB) / 3;
+      const isLightBg = avgLuminance > 135;
+      const lowerThresh = isLightBg ? 30 : 25;
+      const upperThresh = isLightBg ? 76 : 60;
 
-    // Subtitle "SMART GADGETS · BETTER LIFE"
-    ctx.font = '600 10px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = isDarkTheme ? 'rgba(255, 255, 255, 0.65)' : 'rgba(15, 23, 42, 0.65)';
-    ctx.fillText('SMART GADGETS · BETTER LIFE', 0, 40);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
 
-    ctx.restore();
+          // Enforce 100% transparent margin along outermost 2 pixels to erase any raw frame line
+          if (x <= 1 || x >= w - 2 || y <= 1 || y >= h - 2) {
+            d[i + 3] = 0;
+            continue;
+          }
+
+          const r = d[i];
+          const g = d[i + 1];
+          const b = d[i + 2];
+
+          // Check if pixel is standard white/near-white studio backdrop
+          const isStudioWhite = r > 220 && g > 220 && b > 220 && Math.max(r, g, b) - Math.min(r, g, b) < 28;
+          if (isStudioWhite && isLightBg) {
+            d[i + 3] = 0;
+            continue;
+          }
+
+          const diff = Math.sqrt((r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2);
+
+          if (diff < lowerThresh) {
+            d[i + 3] = 0; // Cut out background
+          } else if (diff < upperThresh) {
+            // Soft anti-aliased edge transition
+            const factor = (diff - lowerThresh) / (upperThresh - lowerThresh);
+            d[i + 3] = Math.round(d[i + 3] * factor);
+          }
+        }
+      }
+
+      offCtx.putImageData(imgData, 0, 0);
+    } catch {
+      // CORS fallback
+    }
+    return off;
   };
 
-  const daylightIndex = images.findIndex((url) => url.includes('daylight_flatlay'));
-  const cinematicIndex = images.findIndex((url) => url.includes('cinematic_poster'));
-
   const rawImage = (() => {
-    const nameLower = (item.productName || '').toLowerCase();
-
-    // When commercial poster mode is active (default for unboxed studio aesthetic)
-    if (useCommercialPoster) {
-      // 1. ONIKUMA Gaming Headsets (e.g. K19)
-      if (nameLower.includes('k19') || nameLower.includes('onikuma') || (nameLower.includes('headset') && nameLower.includes('gaming'))) {
-        if (selectedStyle === 'cinematic_night' || selectedStyle === 'cyber_neon' || selectedStyle === 'studio_tech') {
-          return '/images/k19_gaming_night_poster.jpg';
-        }
-        return '/images/k19_gaming_daylight_poster.jpg';
-      }
-
-      // 2. QIF Fast Charging Power Banks (e.g. QY-45, QY-54)
-      if (nameLower.includes('qy-45') || nameLower.includes('qy-54') || nameLower.includes('qif') || (nameLower.includes('power bank') && nameLower.includes('fast charging'))) {
-        if (selectedStyle === 'cinematic_night' || selectedStyle === 'cyber_neon' || selectedStyle === 'studio_tech') {
-          return '/images/qy45_powerbank_night_poster.jpg';
-        }
-        return '/images/qy45_powerbank_daylight_poster.jpg';
-      }
-
-      // 3. A9 Pro Earbuds
-      if (nameLower.includes('a9 pro') || item.productId === 'prod-bw-001') {
-        if (selectedStyle === 'cinematic_night' || selectedStyle === 'cyber_neon' || selectedStyle === 'studio_tech') {
-          return '/images/a9_pro_cinematic_poster.jpg';
-        }
-        return '/images/a9_pro_daylight_flatlay.jpg';
-      }
-
-      // 4. HK9 Ultra Smartwatch
-      if (nameLower.includes('hk9') || nameLower.includes('watch')) {
-        return '/images/hk9_ultra_watch_poster.jpg';
-      }
-
-      // 5. Cyberpunk Magnetic Power Bank
-      if (nameLower.includes('cyberpunk')) {
-        return '/images/cyber_powerbank_poster.jpg';
-      }
-
-      // 6. Tom & Jerry or Superhero Collectibles
-      if (nameLower.includes('superhero') || nameLower.includes('spider-man')) {
-        return '/images/superhero_figure_poster.jpg';
-      }
-      if (nameLower.includes('tom & jerry') || nameLower.includes('tom and jerry')) {
-        return '/images/tom_and_jerry_poster.jpg';
-      }
+    // If AI generated poster exists on creative asset, use it when commercial mode is on
+    if (useCommercialPoster && item.creative?.generatedPosterUrl) {
+      return item.creative.generatedPosterUrl;
     }
-
-    // When viewing a specific supplier photo reference angle:
+    // Otherwise use authentic product reference photo
     if (images[heroImageIndex]) {
       return images[heroImageIndex];
     }
@@ -718,10 +558,31 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
 
     const isNight = selectedStyle === 'cinematic_night' || selectedStyle === 'cyber_neon' || selectedStyle === 'studio_tech';
 
+    // Load official Mr.X Shop Logo Image
+    const logoImg = new Image();
+    logoImg.crossOrigin = 'anonymous';
+    let logoLoaded = false;
+    logoImg.onload = () => {
+      logoLoaded = true;
+      if (!isCanvasRendering) {
+        drawWatermarkLogo();
+      }
+    };
+    logoImg.src = brandSettings.customLogoUrl || (isNight ? '/images/mrx_shop_logo.svg' : '/images/mrx_shop_logo_dark.svg');
+
+    const drawWatermarkLogo = () => {
+      if (!showWatermark) return;
+      if (logoLoaded && logoImg.width > 0) {
+        ctx.save();
+        ctx.drawImage(logoImg, width - 220, 42, 170, 68);
+        ctx.restore();
+      }
+    };
+
     const drawPosterScene = (productImg: HTMLImageElement | null) => {
       // 1. Background Scene
       if (selectedStyle === 'cinematic_night') {
-        // Reference 2: Dark Slate Studio Night with Wet Reflections & Neon Bokeh
+        // Dark Slate Studio Night with Wet Reflections & Neon Bokeh
         const bgGrad = ctx.createRadialGradient(width * 0.5, height * 0.45, 100, width * 0.5, height * 0.5, 750);
         bgGrad.addColorStop(0, '#0a1426');
         bgGrad.addColorStop(0.4, '#060a12');
@@ -754,7 +615,7 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
         ctx.lineWidth = 2.5;
         ctx.stroke();
       } else if (selectedStyle === 'daylight_minimal') {
-        // Reference 1: Bright Clean Daylight Commercial with Daylight Sunlight & Floor Surface
+        // Bright Clean Daylight Commercial with Sunlight & Floor Surface
         const bgGrad = ctx.createLinearGradient(0, 0, width, height);
         bgGrad.addColorStop(0, '#f8fafc');
         bgGrad.addColorStop(0.45, '#f1f5f9');
@@ -793,58 +654,81 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
         ctx.fillRect(0, 0, width, height);
       }
 
-      // 2. Real Product Hero Staging (Unchanged shape, ports, buttons, colors)
+      // 2. Real Product Hero Staging (Isolated Physical Gadget, No Box Borders, True Fidelity)
       if (productImg && productImg.width > 0) {
-        const centerX = selectedStyle === 'cinematic_night' ? width * 0.56 : width * 0.54;
-        const centerY = selectedStyle === 'cinematic_night' ? height * 0.50 : height * 0.48;
-        // Large hero size (640px) so product is prominent and crisp
+        // Isolate the physical product from the original rectangular photo background
+        const isolatedCanvas = isolateProductSubject(productImg);
+
         const targetSize = selectedStyle === 'cinematic_night' ? 620 : 640;
-        
         const ratio = Math.min(targetSize / productImg.width, targetSize / productImg.height);
         const imgW = productImg.width * ratio;
         const imgH = productImg.height * ratio;
+
+        // Dynamic scene-dependent placement (offset to right on pedestal)
+        const centerX = selectedStyle === 'cinematic_night' ? width * 0.55 : width * 0.53;
+        const centerY = selectedStyle === 'cinematic_night' ? height * 0.50 : height * 0.48;
         const imgX = centerX - imgW / 2;
         const imgY = centerY - imgH / 2;
 
-        // Realistic layered ground contact shadow beneath product base
-        const shadowGrad = ctx.createRadialGradient(centerX, centerY + imgH * 0.46, 10, centerX, centerY + imgH * 0.46, imgW * 0.46);
-        shadowGrad.addColorStop(0, isNight ? 'rgba(0, 0, 0, 0.75)' : 'rgba(15, 23, 42, 0.35)');
-        shadowGrad.addColorStop(0.5, isNight ? 'rgba(0, 0, 0, 0.35)' : 'rgba(15, 23, 42, 0.15)');
-        shadowGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = shadowGrad;
+        const baseContactY = centerY + imgH * 0.44;
+
+        // Realistic Layer 1: Tight Dark Contact Shadow right at bottom of physical product
+        ctx.save();
+        const contactGrad = ctx.createRadialGradient(centerX, baseContactY, 4, centerX, baseContactY, imgW * 0.38);
+        contactGrad.addColorStop(0, isNight ? 'rgba(0, 0, 0, 0.95)' : 'rgba(15, 23, 42, 0.55)');
+        contactGrad.addColorStop(0.6, isNight ? 'rgba(0, 0, 0, 0.60)' : 'rgba(15, 23, 42, 0.25)');
+        contactGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = contactGrad;
         ctx.beginPath();
-        ctx.ellipse(centerX, centerY + imgH * 0.46, imgW * 0.46, 26, 0, 0, Math.PI * 2);
+        ctx.ellipse(centerX, baseContactY, imgW * 0.38, 14, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
 
-        // Draw real product photo with soft feathered edge mask (eliminating hard sticker boxes)
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = Math.round(imgW);
-        offCanvas.height = Math.round(imgH);
-        const offCtx = offCanvas.getContext('2d');
-        if (offCtx) {
-          offCtx.drawImage(productImg, 0, 0, imgW, imgH);
-          // Apply soft radial vignette mask so corners and borders blend seamlessly into the scene
-          offCtx.globalCompositeOperation = 'destination-in';
-          const maskGrad = offCtx.createRadialGradient(
-            imgW / 2, imgH / 2, Math.min(imgW, imgH) * 0.35,
-            imgW / 2, imgH / 2, Math.max(imgW, imgH) * 0.52
-          );
-          maskGrad.addColorStop(0, 'rgba(0,0,0,1)');
-          maskGrad.addColorStop(0.85, 'rgba(0,0,0,0.95)');
-          maskGrad.addColorStop(1, 'rgba(0,0,0,0)');
-          offCtx.fillStyle = maskGrad;
-          offCtx.fillRect(0, 0, imgW, imgH);
+        // Realistic Layer 2: Diffuse Ambient Occlusion Shadow
+        ctx.save();
+        const ambientGrad = ctx.createRadialGradient(centerX, baseContactY + 6, 12, centerX, baseContactY + 6, imgW * 0.52);
+        ambientGrad.addColorStop(0, isNight ? 'rgba(0, 0, 0, 0.65)' : 'rgba(15, 23, 42, 0.30)');
+        ambientGrad.addColorStop(0.5, isNight ? 'rgba(0, 0, 0, 0.25)' : 'rgba(15, 23, 42, 0.10)');
+        ambientGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = ambientGrad;
+        ctx.beginPath();
+        ctx.ellipse(centerX, baseContactY + 6, imgW * 0.52, 28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
 
-          ctx.drawImage(offCanvas, imgX, imgY);
-        } else {
-          ctx.drawImage(productImg, imgX, imgY, imgW, imgH);
+        // Realistic Layer 3: Flipped Soft Wet Reflection (for Night / Pedestal style)
+        if (isNight) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.ellipse(width * 0.54, height * 0.72, width * 0.44, height * 0.20, 0, 0, Math.PI * 2);
+          ctx.clip(); // Clip reflection to wet slate pedestal surface
+
+          ctx.save();
+          ctx.translate(imgX, baseContactY * 2 - 10);
+          ctx.scale(1, -0.28); // Flattened inverted reflection
+          ctx.globalAlpha = 0.22;
+          ctx.drawImage(isolatedCanvas, 0, imgY);
+          ctx.restore();
+
+          ctx.restore();
         }
+
+        // Draw the pure physical product (No rectangular box, exact shape, buttons, ports)
+        ctx.drawImage(isolatedCanvas, imgX, imgY, imgW, imgH);
+
+        // Realistic Layer 4: Subtle Environmental Light Rim
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = isNight ? 0.08 : 0.05;
+        ctx.fillStyle = isNight ? '#38bdf8' : '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, imgW * 0.48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
-      // 3. Top-Right Brand Logo (Mr.X Shop)
-      if (showWatermark) {
-        drawMrXLogo(ctx, width - 150, 75, isNight);
-      }
+      // 3. Top-Right Brand Logo (Mr.X Shop Official Deterministic Vector Source)
+      drawWatermarkLogo();
 
       // 4. DYNAMIC Typography & Visual Layout (Derived from each Product)
       if (selectedStyle === 'cinematic_night') {
@@ -1025,7 +909,7 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
         ctx.fillStyle = '#475569';
         ctx.fillText(customData.daylightSubtitle, 60, height - 40);
 
-        // Bottom right ordering note
+        // Bottom right ordering note (strictly phone and site, NO wa.me link)
         ctx.textAlign = 'right';
         ctx.fillStyle = '#64748b';
         ctx.font = '600 13px "Plus Jakarta Sans", sans-serif';
@@ -1039,29 +923,20 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
     img.crossOrigin = 'anonymous';
 
     img.onload = () => {
-      // Check if image is a commercial poster art (either AI generated or preset commercial asset)
+      // Check if image is an already generated full poster
       const isCommercialArt =
         typeof effectiveImage === 'string' &&
-        (effectiveImage.includes('_poster') ||
-          effectiveImage.includes('_flatlay') ||
-          effectiveImage.includes('k19_gaming') ||
-          effectiveImage.includes('qy45_powerbank') ||
-          effectiveImage.includes('a9_pro') ||
-          effectiveImage.includes('cyber_powerbank') ||
-          effectiveImage.includes('hk9_ultra') ||
-          effectiveImage.includes('superhero_figure') ||
-          effectiveImage.includes('tom_and_jerry'));
+        (effectiveImage.includes('_poster_') ||
+          (item.creative?.generatedPosterUrl && effectiveImage === item.creative.generatedPosterUrl));
 
       if (isCommercialArt) {
-        // Draw the full cinematic commercial photography poster edge-to-edge
+        // Draw full generated poster edge-to-edge
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Always overlay the clean official Mr.X Shop brand watermark with subtle shadow
-        if (showWatermark) {
-          drawMrXLogo(ctx, width - 150, 75, isNight);
-        }
+        // Deterministic official brand watermark
+        drawWatermarkLogo();
 
-        // Draw clean official contact footer
+        // Contact footer (NO wa.me link!)
         ctx.textAlign = 'right';
         ctx.font = '600 13px "Plus Jakarta Sans", sans-serif';
         ctx.fillStyle = isNight ? 'rgba(255, 255, 255, 0.75)' : 'rgba(15, 23, 42, 0.75)';
@@ -1270,15 +1145,23 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                 </div>
 
                 {/* Photo Angle Picker from Badhons World */}
-                <div className="w-full mt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-700">
-                      Product Reference Photo ({images.length} available)
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Shape, ports & screen preserved
+                <div className="w-full mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-800">
+                        Badhons World Reference Photos ({images.length} available)
+                      </span>
+                      <span className="text-[10px] font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                        Reference Only · No Background Box
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500">
+                      Select reference angle
                     </span>
                   </div>
+                  <p className="text-[11px] text-slate-500 mb-2.5 leading-snug">
+                    Used strictly as visual references to preserve actual product geometry, buttons, ports, and colors. The physical gadget is extracted and placed naturally in the scene.
+                  </p>
 
                   <div className="flex items-center gap-2 overflow-x-auto pb-1">
                     {/* ✨ AI Commercial Poster Button */}
@@ -1479,12 +1362,13 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                   </div>
                 </div>
 
-                {/* Direct Supplier Source Product Verification Card */}
+                {/* Badhons World Source of Truth Verification Card */}
                 {item.productUrl && (
-                  <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="font-bold text-slate-900">
-                        🔍 অরিজিনাল প্রডাক্ট সোর্স লিংক
+                  <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                        <span>🏢</span>
+                        <span>Badhons World (Source of Truth)</span>
                       </span>
                       <a
                         href={item.productUrl}
@@ -1493,43 +1377,64 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] rounded-md transition-colors shadow-xs"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        <span>ভিজিট করুন</span>
+                        <span>Visit badhonsworld.com</span>
                       </a>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
-                      অ্যাপ্রুভ করার আগে badhonsworld.com-এর আসল প্রডাক্ট পেজ ওপেন করে ছবি ও টেকনিক্যাল স্পেসিফিকেশন মিলিয়ে নিন।
+                      Product name, description, verified specs, and all {images.length} reference photos originate strictly from Badhons World. No random web-search results or AI-invented specs.
                     </p>
-                    <div className="mt-2 pt-1.5 border-t border-blue-200/60 text-[11px] text-blue-700 font-mono truncate">
-                      {item.productUrl}
+                    <div className="pt-1 border-t border-blue-200/60 flex items-center justify-between text-[11px] text-blue-800">
+                      <span className="font-mono truncate max-w-[210px]">{item.productUrl}</span>
+                      <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {images.length} Reference Photos
+                      </span>
                     </div>
                   </div>
                 )}
 
-                {/* Publish Action Button */}
-                <div className="pt-2">
+                {/* Approval & Publish Action Buttons */}
+                <div className="pt-2 space-y-2">
+                  {!item.isApproved && onApprove && (
+                    <button
+                      onClick={async () => {
+                        setIsPublishing(true);
+                        try {
+                          await onApprove(item.id);
+                        } finally {
+                          setIsPublishing(false);
+                        }
+                      }}
+                      disabled={isPublishing}
+                      className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Approve & Add to Evergreen Buffer</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={handlePublishNow}
-                    disabled={isPublishing || item.stage === 'published'}
-                    className={`w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs ${
-                      item.stage === 'published'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    disabled={isPublishing}
+                    className={`w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-50 ${
+                      item.isApproved
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                     }`}
                   >
-                    {item.stage === 'published' ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-600" />
-                        <span>Published to Facebook & Instagram</span>
-                      </>
-                    ) : isPublishing ? (
+                    {isPublishing ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Publishing Post...</span>
+                        <span>Publishing to Meta...</span>
+                      </>
+                    ) : item.isApproved ? (
+                      <>
+                        <Share2 className="w-4 h-4" />
+                        <span>Publish to Facebook & Instagram Now</span>
                       </>
                     ) : (
                       <>
-                        <Share2 className="w-4 h-4" />
-                        <span>Publish to Facebook & Instagram</span>
+                        <Check className="w-4 h-4" />
+                        <span>Approve & Publish to Meta</span>
                       </>
                     )}
                   </button>

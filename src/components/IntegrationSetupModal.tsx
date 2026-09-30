@@ -13,8 +13,10 @@ import {
   RefreshCw,
   HelpCircle,
   Check,
+  Save,
 } from 'lucide-react';
 import type { PostingRules } from '../types/index.ts';
+import { api } from '../services/api.ts';
 
 interface IntegrationSetupModalProps {
   postingRules: PostingRules;
@@ -29,24 +31,62 @@ export const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'meta' | 'website' | 'n8n'>('overview');
 
-  // Meta Credentials State
+  // Meta Credentials State (Real Values from Posting Rules)
   const [metaPageId, setMetaPageId] = useState(postingRules.metaFacebookPageId || '');
-  const [metaPageToken, setMetaPageToken] = useState('EAAOx...[YOUR_META_PAGE_ACCESS_TOKEN]');
-  const [igAccountId, setIgAccountId] = useState('1784140...[YOUR_IG_BUSINESS_ID]');
+  const [metaPageToken, setMetaPageToken] = useState(postingRules.metaFacebookPageToken || '');
+  const [igAccountId, setIgAccountId] = useState(postingRules.metaInstagramAccountId || '');
   const [isTestingMeta, setIsTestingMeta] = useState(false);
-  const [metaTestResult, setMetaTestResult] = useState<string | null>(null);
+  const [metaTestResult, setMetaTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Webhook / n8n State
   const [webhookUrl, setWebhookUrl] = useState('https://your-n8n-instance.com/webhook/badhons-marketing');
   const [copiedCurl, setCopiedCurl] = useState(false);
 
-  const handleTestMeta = () => {
+  const handleTestMeta = async () => {
     setIsTestingMeta(true);
     setMetaTestResult(null);
-    setTimeout(() => {
+    try {
+      const res = await api.testMetaCredentials({
+        pageId: metaPageId,
+        pageToken: metaPageToken,
+        igAccountId,
+      });
+      if (res.success) {
+        setMetaTestResult({
+          success: true,
+          message: res.message || `Meta Graph API Connected! Page verified: "${res.pageName || metaPageId}".`,
+        });
+      } else {
+        setMetaTestResult({
+          success: false,
+          message: res.error || 'Meta connection verification failed. Please check your Page ID and Token.',
+        });
+      }
+    } catch (err: any) {
+      setMetaTestResult({
+        success: false,
+        message: `Network error: ${err.message}`,
+      });
+    } finally {
       setIsTestingMeta(false);
-      setMetaTestResult('Meta Graph API Connected! Permissions verified: pages_manage_posts, instagram_content_publish.');
-    }, 1500);
+    }
+  };
+
+  const handleSaveMeta = async () => {
+    setIsSaving(true);
+    try {
+      await onSaveCredentials({
+        metaFacebookPageId: metaPageId,
+        metaFacebookPageToken: metaPageToken,
+        metaInstagramAccountId: igAccountId,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const copyCurlCode = () => {
@@ -267,21 +307,48 @@ export const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
               </div>
 
               {metaTestResult && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{metaTestResult}</span>
+                <div
+                  className={`p-3 rounded-lg flex items-start gap-2 border text-xs leading-relaxed ${
+                    metaTestResult.success
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}
+                >
+                  {metaTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <span>{metaTestResult.message}</span>
                 </div>
               )}
 
-              <div className="pt-2 flex items-center gap-2">
+              {saveSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2 text-xs">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Meta credentials saved successfully to backend!</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={handleTestMeta}
                   disabled={isTestingMeta}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-xs"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-semibold rounded-lg shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isTestingMeta ? 'animate-spin' : ''}`} />
-                  <span>Test Meta Graph API Connection</span>
+                  <span>{isTestingMeta ? 'Verifying with Meta API...' : 'Test Meta Connection'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveMeta}
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-semibold rounded-lg shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSaving ? 'Saving...' : 'Save Meta Credentials'}</span>
                 </button>
               </div>
             </div>

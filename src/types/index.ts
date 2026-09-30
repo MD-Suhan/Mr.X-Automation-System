@@ -105,9 +105,25 @@ export interface QualityCheckResult {
     spellingCorrect: boolean;
     noMisleadingClaim: boolean;
     stockAvailable: boolean;
+    badhonsWorldTruthGrounded?: boolean;
   };
   notes: string;
   checkedAt: string;
+}
+
+export interface PostHistoryRecord {
+  id: string;
+  contentId: string;
+  productId: string;
+  productName: string;
+  platform: 'facebook' | 'instagram';
+  status: 'success' | 'failure';
+  timestamp: string;
+  platformPostId?: string;
+  postUrl?: string;
+  error?: string;
+  captionSnippet?: string;
+  imageUrl?: string;
 }
 
 export interface PublishingRecord {
@@ -118,6 +134,7 @@ export interface PublishingRecord {
     postUrl?: string;
     timestamp?: string;
     metrics: { likes: number; comments: number; shares: number };
+    error?: string;
   };
   instagram: {
     posted: boolean;
@@ -126,6 +143,7 @@ export interface PublishingRecord {
     postUrl?: string;
     timestamp?: string;
     metrics: { likes: number; comments: number; saves: number };
+    error?: string;
   };
 }
 
@@ -156,6 +174,14 @@ export interface PipelineItem {
   angleVariation?: string;
   isRecycled?: boolean;
   originalItemId?: string;
+  isApproved?: boolean;
+  isPaused?: boolean;
+  lastPublishedAt?: string;
+  totalPublishedCount?: number;
+  lastPlatformStatus?: {
+    facebook?: 'success' | 'failure';
+    instagram?: 'success' | 'failure';
+  };
 }
 
 export interface BufferPoolStatus {
@@ -192,9 +218,12 @@ export interface PostingRules {
   requireManualApproval: boolean;
   metaFacebookPageId: string;
   metaFacebookPageName: string;
+  metaFacebookPageToken?: string;
   metaInstagramHandle: string;
+  metaInstagramAccountId?: string;
   metaConnected: boolean;
   peakHoursSlots?: string[];
+  cronSecret?: string;
 }
 
 export interface SystemLog {
@@ -210,6 +239,8 @@ export interface SystemLog {
     | 'AI_ANALYST'
     | 'CREATIVE_STUDIO'
     | 'QUALITY_GATE'
+    | 'APPROVAL_GATE'
+    | 'SCHEDULER'
     | 'META_PUBLISH';
   message: string;
   meta?: any;

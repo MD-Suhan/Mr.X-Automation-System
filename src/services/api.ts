@@ -103,7 +103,7 @@ export const api = {
 
   async pipelineAction(
     itemId: string,
-    action: 'approve' | 'approve_and_publish' | 'reject' | 'delete'
+    action: 'approve' | 'approve_and_publish' | 'reject' | 'delete' | 'toggle_pause'
   ): Promise<{ success: boolean; item: PipelineItem }> {
     const res = await fetch('/api/pipeline/action', {
       method: 'POST',
@@ -181,6 +181,52 @@ export const api = {
     const res = await fetch('/api/logs/clear', {
       method: 'POST',
     });
+    return res.json();
+  },
+
+  async getPublicationHistory(): Promise<{ history: import('../types/index.ts').PostHistoryRecord[] }> {
+    const res = await fetch('/api/publication-history');
+    if (!res.ok) throw new Error('Failed to fetch publication history');
+    return res.json();
+  },
+
+  async testMetaCredentials(payload: {
+    pageId: string;
+    pageToken: string;
+    igAccountId?: string;
+  }): Promise<{ success: boolean; message?: string; error?: string; pageName?: string; igConnected?: boolean }> {
+    const res = await fetch('/api/meta/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+
+  async triggerCronPublish(forced: boolean = false): Promise<{
+    success: boolean;
+    executed: boolean;
+    message: string;
+    item?: PipelineItem;
+    metaResult?: any;
+  }> {
+    const res = await fetch('/api/cron/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ forced }),
+    });
+    return res.json();
+  },
+
+  async getCronStatus(): Promise<{
+    autonomousEnabled: boolean;
+    lastScheduledRun?: string;
+    nextScheduledRun?: string;
+    totalRuns: number;
+    cronEndpoint: string;
+  }> {
+    const res = await fetch('/api/cron/status');
+    if (!res.ok) throw new Error('Failed to fetch cron status');
     return res.json();
   },
 };
