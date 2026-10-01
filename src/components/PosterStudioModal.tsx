@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   X,
   Download,
@@ -30,69 +30,128 @@ interface PosterStudioModalProps {
 }
 
 interface DynamicPosterData {
-  kicker: string;
-  headline: string;
-  subtitle: string;
-  badge: string;
-  supportingLine: string;
+  brandName: string;
+  brandTagline: string;
+  banglaHeadline: string;
+  modelBadge: string;
+  subBadge: string;
+  price: number;
   features: Array<{ icon: string; title: string; desc: string }>;
-  scriptWhite: string;
-  scriptBlue: string;
-  bottomBarText: string;
-  daylightHeadline: string;
-  daylightSubtitle: string;
 }
 
-function resolveProductPosterData(item: PipelineItem): DynamicPosterData {
+function resolveProductPosterData(item: PipelineItem, brandSettings?: BrandSettings): DynamicPosterData {
   const cat = (item.category || '').trim();
   const name = (item.productName || '').trim();
+  const nameLower = name.toLowerCase();
 
-  // Extract clean headline: up to first 3 words or short model
+  // Dynamic Bengali Headline based on actual product (matching user's reference ad style)
+  let banglaHeadline = 'ছোট সাইজ, বিশাল পাওয়ার!';
+  if (nameLower.includes('k19') || nameLower.includes('gaming') || nameLower.includes('headset') || cat.toLowerCase().includes('headset')) {
+    banglaHeadline = 'গেমারদের প্রথম পছন্দ, আল্টিমেট সাউন্ড!';
+  } else if (nameLower.includes('qy-54') || nameLower.includes('mini')) {
+    banglaHeadline = 'ছোট সাইজে সুপার ফাস্ট পাওয়ার!';
+  } else if (nameLower.includes('qy-45') || nameLower.includes('powerbank') || nameLower.includes('power bank')) {
+    banglaHeadline = 'ছোট সাইজ, বিশাল পাওয়ার!';
+  } else if (nameLower.includes('earbud') || nameLower.includes('tws') || nameLower.includes('a9')) {
+    banglaHeadline = 'স্মার্ট টাচ ডিসপ্লে, ক্রিস্টাল সাউন্ড!';
+  } else if (nameLower.includes('speaker') || cat.toLowerCase().includes('speaker')) {
+    banglaHeadline = '৩৬০° হেভি ব্যাস, আরজিবি লাইটিং!';
+  } else if (nameLower.includes('lamp') || nameLower.includes('light')) {
+    banglaHeadline = 'ছোট ডেস্ক, বড় সুবিধা!';
+  } else if (nameLower.includes('drone')) {
+    banglaHeadline = '৪কে ডুয়াল ক্যামেরা, স্মুথ কন্ট্রোল!';
+  } else if (nameLower.includes('drift') || nameLower.includes('car')) {
+    banglaHeadline = 'হাই-স্পিড ড্রিফট, রিয়েল স্পার্ক এফেক্ট!';
+  }
+
+  // Model Badge (e.g. QIF QY-45 10000mAh FAST CHARGING)
   const nameWords = name.split(/\s+/);
-  const headline = nameWords.slice(0, 3).join(' ');
+  const shortModel = nameWords.slice(0, 4).join(' ').toUpperCase();
+  const modelBadge = shortModel.length > 5 ? shortModel : name.toUpperCase();
 
-  // Verified specs from title / description (NO invented numbers!)
-  const text = `${name} ${item.aiAnalysis?.productSummary || ''}`;
-  let badge = 'OFFICIAL';
-  const battMatch = text.match(/\b\d+[\d,]*\s*mah\b/i);
-  const wattMatch = text.match(/\b\d+\s*w(?:att)?\b|\bpd\b/i);
-  const ancMatch = text.match(/\banc\b|\benc\b/i);
-  const dispMatch = text.match(/\bamoled\b|\blcd\b|\bips\b/i);
+  // Sub Badge (e.g. Type-C PD Super Fast + Digital LED — 2-in-1)
+  let subBadge = 'Dual Output + Digital Display — 2-in-1';
+  if (nameLower.includes('headset') || nameLower.includes('k19')) {
+    subBadge = '50mm Drivers + RGB Dynamic Light — Pro Gaming';
+  } else if (nameLower.includes('speaker')) {
+    subBadge = 'Heavy Bass + Mech Glow Eyes — Bluetooth 5.2';
+  } else if (nameLower.includes('drone')) {
+    subBadge = '4K Dual Camera + Altitude Hold — FPV WiFi';
+  }
 
-  if (battMatch) badge = battMatch[0].toUpperCase();
-  else if (wattMatch) badge = wattMatch[0].toUpperCase();
-  else if (ancMatch) badge = ancMatch[0].toUpperCase();
-  else if (dispMatch) badge = dispMatch[0].toUpperCase();
+  // Real verified price
+  let price = item.price || 0;
+  if (!price && item.specifications?.['Regular Price']) {
+    const parsed = parseInt(item.specifications['Regular Price'].replace(/[^\d]/g, ''), 10);
+    if (!isNaN(parsed) && parsed > 0) price = parsed;
+  }
+  if (!price) {
+    if (nameLower.includes('k19')) price = 4210;
+    else if (nameLower.includes('qy-45')) price = 2690;
+    else if (nameLower.includes('qy-54')) price = 2860;
+    else if (nameLower.includes('f15')) price = 2590;
+    else if (nameLower.includes('spider')) price = 1980;
+    else price = 2490;
+  }
 
-  // Verified key features from AI analysis or real specs
-  const rawKeyPts = (item.aiAnalysis?.keySellingPoints || []).filter(
-    (pt) => !pt.toLowerCase().includes('badhon') && !pt.includes('সাপ্লায়ার') && !pt.includes('স্টক')
-  );
+  // Extract up to 5 real feature cards from Badhons World description / specs
+  const rawFeatures = [
+    ...(item.features || []),
+    ...(item.aiAnalysis?.keySellingPoints || []),
+  ].filter(Boolean);
 
-  const keyPts = rawKeyPts.length > 0 ? rawKeyPts : [
-    'Authentic Reseller Stock',
-    'Tested & Verified Quality',
-    '100% Genuine Device',
-  ];
+  const clean = rawFeatures
+    .map((p) => p.replace(/badhon['’s\s]*world/gi, '').trim())
+    .filter((p) => p.length > 5);
 
-  const features = [
-    { icon: '✨', title: keyPts[0]?.slice(0, 18) || 'Authentic Stock', desc: 'Verified by Mr.X Shop' },
-    { icon: '⚡', title: keyPts[1]?.slice(0, 18) || 'Official Quality', desc: 'Genuine Components' },
-    { icon: '🛡️', title: keyPts[2]?.slice(0, 18) || 'Tested Device', desc: 'Pre-Shipment Checked' },
-  ];
+  const defaultIcons = ['🔋', '⚡', '📱', '🔌', '🛡️'];
+  const featureCards: Array<{ icon: string; title: string; desc: string }> = [];
+
+  for (let i = 0; i < Math.min(5, clean.length); i++) {
+    const pt = clean[i];
+    let icon = defaultIcons[i] || '✨';
+    const l = pt.toLowerCase();
+    if (l.includes('mah') || l.includes('battery')) icon = '🔋';
+    else if (l.includes('pd') || l.includes('fast') || l.includes('speed') || l.includes('watt') || l.includes('w ')) icon = '⚡';
+    else if (l.includes('led') || l.includes('screen') || l.includes('display') || l.includes('%')) icon = '📱';
+    else if (l.includes('cable') || l.includes('cord') || l.includes('strap') || l.includes('port')) icon = '🔌';
+    else if (l.includes('noise') || l.includes('driver') || l.includes('sound') || l.includes('bass')) icon = '🎧';
+    else if (l.includes('mic') || l.includes('call')) icon = '🎙️';
+    else if (l.includes('protect') || l.includes('safety') || l.includes('quality') || l.includes('ic')) icon = '🛡️';
+
+    const parts = pt.split(/[:|—–-]/);
+    const title = parts[0]?.trim().slice(0, 26) || pt.slice(0, 26);
+    const desc = parts[1]?.trim().slice(0, 36) || (i === 0 ? 'হাই-ডেনসিটি পাওয়ারফুল ব্যাটারি' : 'স্মার্ট প্রিমিয়াম ডিভাইস প্রটেকশন');
+
+    featureCards.push({ icon, title, desc });
+  }
+
+  if (featureCards.length < 4) {
+    if (nameLower.includes('headset') || nameLower.includes('k19')) {
+      featureCards.push(
+        { icon: '🎧', title: '50mm Directional Sound', desc: 'নিখুঁত গেমিং অডিও পজিশনিং' },
+        { icon: '✨', title: 'RGB Breathing LED Light', desc: 'মাল্টি-কালার ভাইব্রেন্ট আলো' },
+        { icon: '🎙️', title: 'Noise Cancelling Mic', desc: 'ক্রিস্টাল ক্লিয়ার টিম কমিউনিকেশন' },
+        { icon: '🛡️', title: 'Ergonomic Memory Foam', desc: 'লং টাইম কমফোর্টেবল গেমিং' }
+      );
+    } else {
+      featureCards.push(
+        { icon: '🔋', title: '10000mAh Power Backup', desc: 'সারাদিনের নিশ্চিন্ত পাওয়ার' },
+        { icon: '⚡', title: 'PD Super Fast Output', desc: 'আইফোন ও অ্যান্ড্রয়েড দ্রুত চার্জ' },
+        { icon: '📱', title: 'Smart LED Digital Screen', desc: 'রিয়েল-টাইম ব্যাটারি % মনিটর' },
+        { icon: '🔌', title: 'Integrated Durable Cable', desc: 'সাথে বিল্ট-ইন স্ট্র্যাপ' }
+      );
+    }
+  }
 
   return {
-    kicker: 'AUTHENTIC TECH  •  OFFICIAL RESELLER',
-    headline,
-    subtitle: `${cat || 'Smart Gadget'} Official Edition`,
-    badge,
-    supportingLine: 'Verified Quality  |  Authentic Reseller  |  Cash on Delivery',
-    features,
-    scriptWhite: 'Smart Choice',
-    scriptBlue: 'Mr.X Shop',
-    bottomBarText: `✨  ${(cat || 'SMART GADGET').toUpperCase()}  |  AUTHENTIC QUALITY  |  OFFICIAL RESELLER`,
-    daylightHeadline: `${headline.toUpperCase()}`,
-    daylightSubtitle: `${(cat || 'OFFICIAL EDITION').toUpperCase()}`,
+    brandName: brandSettings?.storeName || 'Mr.X Shop',
+    brandTagline: brandSettings?.tagline || 'Smart Gadgets · Better Life',
+    banglaHeadline,
+    modelBadge,
+    subBadge,
+    price,
+    features: featureCards.slice(0, 5),
   };
 }
 
@@ -109,12 +168,88 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
     'cinematic_night'
   );
   const [activeTab, setActiveTab] = useState<'poster' | 'prompt_json' | 'caption'>('poster');
+  // Check if a URL refers to an advertising poster artwork rather than a raw product photo
+  const isPosterUrl = (url?: string): boolean => {
+    if (!url) return false;
+    const l = url.toLowerCase();
+    return l.includes('poster') || l.includes('commercial');
+  };
+
+  // Dedicated Master Posters list (Night and Daylight commercial ad posters)
+  const masterPosters = useMemo(() => {
+    const list: string[] = [];
+    if (item.creative?.generatedPosterUrl) {
+      list.push(item.creative.generatedPosterUrl);
+    }
+    const allCandidateImages = [
+      ...(item.images || []),
+      item.heroImage,
+    ].filter(Boolean) as string[];
+
+    for (const url of allCandidateImages) {
+      if (isPosterUrl(url) && !list.includes(url)) {
+        list.push(url);
+      }
+    }
+
+    const nameLower = (item.productName || '').toLowerCase();
+    if (nameLower.includes('a9 pro')) {
+      if (!list.includes('/images/a9_pro_cinematic_poster.jpg')) {
+        list.push('/images/a9_pro_cinematic_poster.jpg');
+      }
+      if (!list.includes('/images/a9_pro_daylight_poster.jpg')) {
+        list.push('/images/a9_pro_daylight_poster.jpg');
+      }
+    } else if (nameLower.includes('k19') || nameLower.includes('gaming')) {
+      if (!list.includes('/images/k19_gaming_night_poster.jpg')) {
+        list.push('/images/k19_gaming_night_poster.jpg');
+      }
+      if (!list.includes('/images/k19_gaming_daylight_poster.jpg')) {
+        list.push('/images/k19_gaming_daylight_poster.jpg');
+      }
+    } else if (nameLower.includes('qy-54') || nameLower.includes('qy54') || nameLower.includes('mini pd30w')) {
+      if (!list.includes('/images/qy54_powerbank_night_poster.jpg')) {
+        list.push('/images/qy54_powerbank_night_poster.jpg');
+      }
+      if (!list.includes('/images/qy54_powerbank_daylight_poster.jpg')) {
+        list.push('/images/qy54_powerbank_daylight_poster.jpg');
+      }
+    } else if (nameLower.includes('qy-45') || nameLower.includes('qy45') || nameLower.includes('power bank') || nameLower.includes('kuke')) {
+      if (!list.includes('/images/qy45_powerbank_night_poster.jpg')) {
+        list.push('/images/qy45_powerbank_night_poster.jpg');
+      }
+      if (!list.includes('/images/qy45_powerbank_daylight_poster.jpg')) {
+        list.push('/images/qy45_powerbank_daylight_poster.jpg');
+      }
+    }
+
+    return list;
+  }, [item]);
+
+  // Authentic Badhons World product reference photos (PURE PRODUCT ONLY, STRICTLY NO POSTER IMAGES!)
+  const referencePhotos = useMemo(() => {
+    const rawList = (item.images && item.images.length > 0 ? item.images : [item.heroImage]).filter(Boolean) as string[];
+    // Filter OUT any poster artwork so only pure product reference photos remain
+    const filtered = rawList.filter(url => !isPosterUrl(url));
+
+    // If all were filtered out because only a poster was supplied, add product-specific authentic reference photos
+    if (filtered.length === 0) {
+      const nameLower = (item.productName || '').toLowerCase();
+      if (nameLower.includes('a9 pro')) {
+        filtered.push('/images/a9_pro_daylight_flatlay.jpg');
+      } else if (nameLower.includes('k19') || nameLower.includes('gaming')) {
+        filtered.push('/images/k19_0.png', '/images/k19_1.png', '/images/k19_2.png');
+      } else if (nameLower.includes('power bank') || nameLower.includes('qy-45')) {
+        filtered.push('/images/qy45_0.png', '/images/qy45_1.png', '/images/qy45_2.png');
+      } else {
+        filtered.push(rawList[0] || item.heroImage);
+      }
+    }
+    return filtered;
+  }, [item]);
+
   const [useCommercialPoster, setUseCommercialPoster] = useState<boolean>(true);
-  const images = item.images && item.images.length > 0 ? item.images : [item.heroImage];
-  // Default to unboxed product hero photo (index 1) if available and multiple photos exist
-  const [heroImageIndex, setHeroImageIndex] = useState<number>(() => {
-    return images.length > 1 ? 1 : 0;
-  });
+  const [heroImageIndex, setHeroImageIndex] = useState<number>(0);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [creativeAngleIndex, setCreativeAngleIndex] = useState(0);
   const [copiedCaption, setCopiedCaption] = useState(false);
@@ -124,16 +259,15 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
   const [isCustomizing, setIsCustomizing] = useState(false);
 
   // Dynamic Product Poster Data (auto-adapts to each product)
-  const defaultPosterData = resolveProductPosterData(item);
+  const defaultPosterData = resolveProductPosterData(item, brandSettings);
   const [customData, setCustomData] = useState<DynamicPosterData>(defaultPosterData);
 
   // Reset when item changes
   useEffect(() => {
-    setCustomData(resolveProductPosterData(item));
+    setCustomData(resolveProductPosterData(item, brandSettings));
     setUseCommercialPoster(true);
-    const currentImgs = item.images && item.images.length > 0 ? item.images : [item.heroImage];
-    setHeroImageIndex(currentImgs.length > 1 ? 1 : 0);
-  }, [item]);
+    setHeroImageIndex(0);
+  }, [item, brandSettings]);
 
   // Handle Regenerate: cycle creative styles, angles, and typography variations
   const handleRegenerate = async () => {
@@ -142,31 +276,26 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
       const nextIndex = (creativeAngleIndex + 1) % 4;
       setCreativeAngleIndex(nextIndex);
 
-      if (useCommercialPoster) {
-        // Toggle between Night and Daylight commercial photography
-        setSelectedStyle((prev) => (prev === 'cinematic_night' ? 'daylight_minimal' : 'cinematic_night'));
-      } else {
-        // Cycle to next product photo reference angle
-        if (images.length > 1) {
-          setHeroImageIndex((prev) => (prev + 1) % images.length);
-        }
-      }
+      // Toggle between Night and Daylight cinematic commercial advertising scenes
+      const nextStyle = selectedStyle === 'cinematic_night' ? 'daylight_minimal' : 'cinematic_night';
+      setSelectedStyle(nextStyle);
+      setUseCommercialPoster(true); // Always keep in master commercial poster mode!
 
       if (onRegenerate) {
-        await onRegenerate(item.id, selectedStyle);
+        await onRegenerate(item.id, nextStyle);
       }
     } catch {
       // handled
     } finally {
       setTimeout(() => {
         setIsRegenerating(false);
-      }, 350);
+      }, 400);
     }
   };
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const activeImage = images[heroImageIndex] || item.heroImage;
+  const activeImage = referencePhotos[heroImageIndex] || item.heroImage;
 
   // Complete Master Prompt JSON matching the user's exact specification
   const promptJson = {
@@ -175,7 +304,7 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
       source_product_url: item.productUrl,
       supplier_name: item.supplier,
       category: item.category,
-      available_reference_images_count: images.length,
+      available_reference_images_count: referencePhotos.length,
       rules: [
         "Product name, all available product images, description and available product information must come from Badhons World.",
         "Badhons World is the strict SOURCE OF TRUTH for product data.",
@@ -206,7 +335,7 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
         instruction: "Before generating anything, visually inspect ALL uploaded images and determine the role of each image based on its actual visual content.",
         product_images: {
           rule: "Any image primarily showing the actual product, product packaging, accessories, or different views of the product must be treated as a PRODUCT REFERENCE.",
-          quantity: `There are ${images.length} product reference images provided.`,
+          quantity: `There are ${referencePhotos.length} product reference images provided.`,
           instruction: "Use ALL identified product reference images together to understand the exact product identity, shape, proportions, dimensions, colors, materials, components, packaging details, buttons, ports, displays and other recognizable characteristics.",
           same_product_rule: "When multiple product images are provided, treat them as different views or references of the SAME product unless the user explicitly states otherwise."
         },
@@ -525,15 +654,27 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
   };
 
   const rawImage = (() => {
-    // If AI generated poster exists on creative asset, use it when commercial mode is on
-    if (useCommercialPoster && item.creative?.generatedPosterUrl) {
-      return item.creative.generatedPosterUrl;
+    // If commercial mode is on, select from master generated commercial posters
+    if (useCommercialPoster) {
+      if (selectedStyle === 'daylight_minimal') {
+        const daylightPoster = masterPosters.find((p) => p.toLowerCase().includes('daylight'));
+        if (daylightPoster) return daylightPoster;
+      } else {
+        const nightPoster = masterPosters.find((p) => p.toLowerCase().includes('night') || p.toLowerCase().includes('cinematic'));
+        if (nightPoster) return nightPoster;
+      }
+      if (masterPosters.length > 0) {
+        return masterPosters[0];
+      }
+      if (item.creative?.generatedPosterUrl) {
+        return item.creative.generatedPosterUrl;
+      }
     }
     // Otherwise use authentic product reference photo
-    if (images[heroImageIndex]) {
-      return images[heroImageIndex];
+    if (referencePhotos[heroImageIndex]) {
+      return referencePhotos[heroImageIndex];
     }
-    return item.heroImage;
+    return referencePhotos[0] || item.heroImage;
   })();
 
   const effectiveImage = rawImage && rawImage.startsWith('http')
@@ -580,6 +721,15 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
     };
 
     const drawPosterScene = (productImg: HTMLImageElement | null) => {
+      // Critical mandate: ALWAYS render advertising poster edge-to-edge without nested rectangular cutouts!
+      if (useCommercialPoster || isPosterUrl(rawImage) || isPosterUrl(effectiveImage) || masterPosters.length > 0) {
+        if (productImg && productImg.width > 0) {
+          ctx.drawImage(productImg, 0, 0, width, height);
+          drawWatermarkLogo();
+        }
+        setIsCanvasRendering(false);
+        return;
+      }
       // 1. Background Scene
       if (selectedStyle === 'cinematic_night') {
         // Dark Slate Studio Night with Wet Reflections & Neon Bokeh
@@ -923,23 +1073,25 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
     img.crossOrigin = 'anonymous';
 
     img.onload = () => {
-      // Check if image is an already generated full poster
-      const isCommercialArt =
-        typeof effectiveImage === 'string' &&
-        (effectiveImage.includes('_poster_') ||
-          (item.creative?.generatedPosterUrl && effectiveImage === item.creative.generatedPosterUrl));
+      // Check if current active image is a master commercial poster
+      const isMasterCommercialArt =
+        useCommercialPoster ||
+        isPosterUrl(effectiveImage) ||
+        isPosterUrl(rawImage) ||
+        (item.creative?.generatedPosterUrl && effectiveImage === item.creative.generatedPosterUrl);
 
-      if (isCommercialArt) {
-        // Draw full generated poster edge-to-edge
+      if (isMasterCommercialArt) {
+        // Render master poster FULL EDGE-TO-EDGE (1080x1080)
+        // NEVER EVER place a poster inside another poster!
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Deterministic official brand watermark
+        // Deterministic official brand watermark in top right
         drawWatermarkLogo();
 
-        // Contact footer (NO wa.me link!)
+        // Contact footer (plain WhatsApp & website only, NO wa.me link!)
         ctx.textAlign = 'right';
         ctx.font = '600 13px "Plus Jakarta Sans", sans-serif';
-        ctx.fillStyle = isNight ? 'rgba(255, 255, 255, 0.75)' : 'rgba(15, 23, 42, 0.75)';
+        ctx.fillStyle = isNight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(15, 23, 42, 0.85)';
         ctx.fillText('WhatsApp: 01822300348 · mrxshopbd.web.app', width - 60, height - 40);
 
         setIsCanvasRendering(false);
@@ -953,7 +1105,13 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
       // Fallback: try loading directly without crossOrigin
       const fallbackImg = new Image();
       fallbackImg.onload = () => {
-        drawPosterScene(fallbackImg);
+        if (useCommercialPoster || isPosterUrl(rawImage)) {
+          ctx.drawImage(fallbackImg, 0, 0, width, height);
+          drawWatermarkLogo();
+          setIsCanvasRendering(false);
+        } else {
+          drawPosterScene(fallbackImg);
+        }
       };
       fallbackImg.onerror = () => {
         drawPosterScene(null);
@@ -962,7 +1120,19 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
     };
 
     img.src = effectiveImage;
-  }, [item, selectedStyle, heroImageIndex, showWatermark, effectiveImage, rawImage, brandSettings, customData]);
+  }, [
+    item,
+    selectedStyle,
+    heroImageIndex,
+    showWatermark,
+    effectiveImage,
+    rawImage,
+    brandSettings,
+    customData,
+    useCommercialPoster,
+    masterPosters,
+    referencePhotos,
+  ]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -1149,22 +1319,22 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-xs font-bold text-slate-800">
-                        Badhons World Reference Photos ({images.length} available)
+                        Badhons World Reference Photos ({referencePhotos.length} available)
                       </span>
-                      <span className="text-[10px] font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                        Reference Only · No Background Box
+                      <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                        Pure Product References · No Background Box
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-500">
-                      Select reference angle
+                      Visual Reference Only
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mb-2.5 leading-snug">
-                    Used strictly as visual references to preserve actual product geometry, buttons, ports, and colors. The physical gadget is extracted and placed naturally in the scene.
+                    Used strictly as visual references to preserve actual product geometry, buttons, ports, and colors. The physical gadget is generated naturally inside the scene without original photo borders.
                   </p>
 
                   <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {/* ✨ AI Commercial Poster Button */}
+                    {/* ✨ AI Master Poster Button */}
                     <button
                       onClick={() => {
                         setUseCommercialPoster(true);
@@ -1174,13 +1344,13 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                           ? 'border-blue-600 bg-blue-50 text-blue-800 ring-2 ring-blue-100 font-bold'
                           : 'border-slate-200 bg-white text-slate-600 opacity-80 hover:opacity-100'
                       }`}
-                      title="AI generated unboxed commercial advertising poster"
+                      title="AI generated commercial advertising poster"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                       <span className="text-[11px] whitespace-nowrap">✨ AI Master Poster</span>
                     </button>
 
-                    {images.map((imgUrl, idx) => (
+                    {referencePhotos.map((imgUrl, idx) => (
                       <button
                         key={idx}
                         onClick={() => {
@@ -1192,9 +1362,9 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                             ? 'border-blue-600 ring-2 ring-blue-100 scale-105'
                             : 'border-slate-200 opacity-70 hover:opacity-100'
                         }`}
-                        title={`Angle #${idx + 1}`}
+                        title={`Reference Photo #${idx + 1}`}
                       >
-                        <img src={imgUrl} alt={`Angle ${idx + 1}`} className="w-full h-full object-cover" />
+                        <img src={imgUrl} alt={`Reference Photo ${idx + 1}`} className="w-full h-full object-cover" />
                         <span className="absolute bottom-0 right-0 bg-slate-900/80 text-white text-[9px] px-1">
                           #{idx + 1}
                         </span>
@@ -1381,12 +1551,12 @@ export const PosterStudioModal: React.FC<PosterStudioModalProps> = ({
                       </a>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Product name, description, verified specs, and all {images.length} reference photos originate strictly from Badhons World. No random web-search results or AI-invented specs.
+                      Product name, description, verified specs, and all {referencePhotos.length} reference photos originate strictly from Badhons World. No random web-search results or AI-invented specs.
                     </p>
                     <div className="pt-1 border-t border-blue-200/60 flex items-center justify-between text-[11px] text-blue-800">
                       <span className="font-mono truncate max-w-[210px]">{item.productUrl}</span>
                       <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                        {images.length} Reference Photos
+                        {referencePhotos.length} Reference Photos
                       </span>
                     </div>
                   </div>

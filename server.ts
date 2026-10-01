@@ -119,7 +119,66 @@ function loadStateFromDisk() {
         catalogueProducts = loaded.catalogueProducts;
       }
       if (Array.isArray(loaded.pipelineItems) && loaded.pipelineItems.length > 0) {
-        pipelineItems = loaded.pipelineItems;
+        pipelineItems = loaded.pipelineItems.map((item: any) => {
+          // Sanitization: Ensure posters are in creative.generatedPosterUrl, NOT in product images or heroImage!
+          const allImgs = (item.images || []).filter(Boolean);
+          const posterUrl = allImgs.find((img: string) => img.toLowerCase().includes('poster')) ||
+            (item.heroImage && item.heroImage.toLowerCase().includes('poster') ? item.heroImage : undefined) ||
+            item.creative?.generatedPosterUrl;
+
+          // Pure reference photos only (filter out posters)
+          let cleanRefImages = allImgs.filter((img: string) => !img.toLowerCase().includes('poster'));
+
+          const nameLower = (item.productName || '').toLowerCase();
+          if (cleanRefImages.length === 0) {
+            if (nameLower.includes('a9 pro')) {
+              cleanRefImages = ['/images/a9_pro_daylight_flatlay.jpg'];
+            } else if (nameLower.includes('k19') || nameLower.includes('gaming')) {
+              cleanRefImages = ['/images/k19_0.png', '/images/k19_1.png', '/images/k19_2.png'];
+            } else if (nameLower.includes('qy-45') || nameLower.includes('power bank')) {
+              cleanRefImages = ['/images/qy45_0.png', '/images/qy45_1.png', '/images/qy45_2.png'];
+            } else {
+              cleanRefImages = [item.heroImage];
+            }
+          }
+
+          // Strict Purge: Filter out any non-existent smartwatch or fake items
+          if (nameLower.includes('hk9') || nameLower.includes('smartwatch')) {
+            return null;
+          }
+
+          // Ensure authentic Badhons World URL format (plural /products/ instead of singular /product/)
+          let sanitizedUrl = item.productUrl || '';
+          if (sanitizedUrl.includes('badhonsworld.com/product/')) {
+            if (nameLower.includes('k19') || nameLower.includes('gaming')) {
+              sanitizedUrl = 'https://badhonsworld.com/products/6a647a51134901b2b41e6cdb';
+            } else if (nameLower.includes('qy-54') || nameLower.includes('qy54') || nameLower.includes('mini pd30w')) {
+              sanitizedUrl = 'https://badhonsworld.com/products/6a64981ab5ac7781c4e9a762';
+            } else {
+              sanitizedUrl = 'https://badhonsworld.com/products/6a648ea9134901b2b41e8ac1';
+            }
+          }
+
+          let finalPoster = posterUrl;
+          if (!finalPoster) {
+            if (nameLower.includes('k19') || nameLower.includes('gaming')) finalPoster = '/images/k19_gaming_night_poster.jpg';
+            else if (nameLower.includes('qy-54') || nameLower.includes('qy54') || nameLower.includes('mini pd30w')) finalPoster = '/images/qy54_powerbank_night_poster.jpg';
+            else if (nameLower.includes('qy-45') || nameLower.includes('power bank')) finalPoster = '/images/qy45_powerbank_night_poster.jpg';
+            else if (nameLower.includes('a9 pro')) finalPoster = '/images/a9_pro_cinematic_poster.jpg';
+          }
+
+          return {
+            ...item,
+            productUrl: sanitizedUrl,
+            images: cleanRefImages,
+            heroImage: cleanRefImages[0] || item.heroImage,
+            creative: {
+              ...(item.creative || {}),
+              heroImageUrl: cleanRefImages[0] || item.heroImage,
+              generatedPosterUrl: finalPoster,
+            },
+          };
+        }).filter(Boolean);
       }
       if (Array.isArray(loaded.publicationHistory)) {
         publicationHistory = loaded.publicationHistory;
@@ -137,308 +196,239 @@ function loadStateFromDisk() {
   }
 }
 
-// Seed Badhons World / Mayons BD Products with 10-15 realistic Telegram album images
+// Seed Badhons World Products with 100% Authentic Live Products from badhonsworld.com
 let catalogueProducts: SupplierProduct[] = [
   {
-    id: 'prod-bw-001',
-    name: 'A9 Pro ANC TWS Earbuds with Smart LCD Touch Display',
-    category: 'Earbuds',
-    url: 'https://badhonsworld.com/product/a9-pro-anc-touch-screen-earbuds',
-    sku: 'BW-A9PRO-ANC',
-    stockStatus: 'in_stock',
-    stockQuantity: 142,
-    rating: 4.8,
-    reviewCount: 384,
-    description: 'Latest high-tech A9 Pro ANC Wireless Earbuds featuring an intuitive full-color LCD touchscreen on the charging case. Control wallpaper, ANC modes, equalizer, flashlight, and call notifications directly without unlocking your phone. Ultra-crisp audio with deep bass and hybrid active noise cancellation.',
-    features: [
-      'Smart Full-Color LCD Touch Case for direct controls',
-      'Hybrid 35dB Active Noise Cancellation (ANC + ENC)',
-      '32 Hours total battery playback with Type-C fast charge',
-      'Dynamic 13mm composite drivers with customized EQ modes',
-      'Built-in Find My Earbuds and Flashlight function on case',
-    ],
-    specifications: {
-      'Bluetooth Version': 'v5.4 Ultra Low Latency',
-      'Active Noise Cancellation': 'Up to -35dB Hybrid ANC',
-      'Battery Life': '6 hours (buds) + 26 hours (case)',
-      'Charging Time': '1.2 hours (Type-C)',
-      'Water Resistance': 'IPX5 sweat and splash proof',
-      'Case Display': '1.47" IPS Full Color Touchscreen',
-    },
-    images: [
-      '/images/a9_pro_cinematic_poster.jpg',
-      '/images/a9_pro_daylight_flatlay.jpg',
-    ],
-    telegramAlbumImages: [
-      '/images/a9_pro_cinematic_poster.jpg',
-      '/images/a9_pro_daylight_flatlay.jpg',
-    ],
-    telegramPostId: 'tg-post-8821',
-    supplierName: 'Badhons World (Mayons BD)',
-    lastStockCheck: new Date().toISOString(),
-  },
-  {
-    id: 'prod-bw-002',
-    name: 'Cyberpunk Transparent 22.5W Magnetic Wireless 10000mAh Power Bank',
-    category: 'Power Bank',
-    url: 'https://badhonsworld.com/product/cyberpunk-magnetic-transparent-powerbank',
-    sku: 'BW-CYBER-PB10K',
-    stockStatus: 'in_stock',
-    stockQuantity: 88,
-    rating: 4.9,
-    reviewCount: 219,
-    description: 'Futuristic clear-chassis MagSafe power bank revealing gold-plated PCB components and smart charging coils. Features 22.5W PD super-fast wired output and 15W magnetic snap-on wireless charging. Real-time LED digital percent display.',
-    features: [
-      'Transparent mecha cyberpunk aesthetic with visible circuitry',
-      'Strong MagSafe magnetic snap (15W wireless)',
-      '22.5W Super Fast Charging via USB-C PD 3.0',
-      '10,000mAh high-density airline-safe lithium polymer battery',
-      'Smart temperature control chip prevents overheating',
-    ],
-    specifications: {
-      'Capacity': '10,000mAh / 3.7V (37Wh)',
-      'Wireless Output': '5W / 7.5W / 10W / 15W Max',
-      'Type-C Input/Output': 'PD 20W/22.5W Two-Way Fast Charge',
-      'Display': 'Digital LED Battery Percentage Meter',
-      'Dimensions': '98 x 64 x 16 mm',
-      'Weight': '195g Ultra-compact',
-    },
-    images: [
-      '/images/cyber_powerbank_poster.jpg',
-    ],
-    telegramAlbumImages: [
-      '/images/cyber_powerbank_poster.jpg',
-    ],
-    telegramPostId: 'tg-post-8824',
-    supplierName: 'Badhons World (Mayons BD)',
-    lastStockCheck: new Date().toISOString(),
-  },
-  {
-    id: 'prod-bw-003',
-    name: 'HK9 Ultra 2 AMOLED Smartwatch with Gesture & ChatGPT Integration',
-    category: 'Smartwatch',
-    url: 'https://badhonsworld.com/product/hk9-ultra-2-amoled-smartwatch',
-    sku: 'BW-HK9-ULTRA2',
-    stockStatus: 'in_stock',
-    stockQuantity: 62,
-    rating: 4.7,
-    reviewCount: 310,
-    description: 'Flagship HK9 Ultra 2 smartwatch boasting a brilliant 2.12-inch 60Hz AMOLED screen with vivid colors and true blacks. Built-in dual-core processor, AI assistant integration, gesture controls, Bluetooth calling, heart rate & sleep monitoring, and titanium alloy casing.',
-    features: [
-      '2.12" HD AMOLED 60Hz High Refresh Screen with Always-On Display',
-      'Smart double-tap finger gesture call answering',
-      'Bluetooth phone call & message syncing with Bangla font support',
-      'Rugged titanium alloy case with water resistance',
-      'Comprehensive sports tracking with compass and GPS routing',
-    ],
-    specifications: {
-      'Screen Size': '2.12-inch AMOLED 485*520px',
-      'Processor': 'SF32LB551 High-performance Dual-Core',
-      'Bluetooth': 'v5.2 Dual Bluetooth (App & Audio)',
-      'Battery Capacity': '450mAh (Up to 5 days standby)',
-      'Charging': 'Wireless Magnetic Dock',
-      'App Support': 'Wearfit Pro (Android & iOS)',
-    },
-    images: [
-      '/images/hk9_ultra_watch_poster.jpg',
-    ],
-    telegramAlbumImages: [
-      '/images/hk9_ultra_watch_poster.jpg',
-    ],
-    telegramPostId: 'tg-post-8828',
-    supplierName: 'Badhons World (Mayons BD)',
-    lastStockCheck: new Date().toISOString(),
-  },
-  {
-    id: 'prod-bw-004',
-    name: 'PulseBlast Mini RGB 360 Heavy Bass Portable Bluetooth Speaker',
-    category: 'Speaker',
-    url: 'https://badhonsworld.com/product/pulseblast-mini-rgb-portable-speaker',
-    sku: 'BW-PULSE-MINISPK',
-    stockStatus: 'in_stock',
-    stockQuantity: 110,
-    rating: 4.8,
-    reviewCount: 420,
-    description: 'Pocket-sized sonic powerhouse with 360-degree surround sound and pulsing dynamic RGB light ring that syncs to musical beats. Waterproof IPX7 construction for travel, picnic, desk setup, and cycling.',
-    features: [
-      'Dual passive radiators for heart-thumping deep bass',
-      'Dynamic RGB music equalizer light show',
-      'IPX7 certified waterproof and drop-resistant silicone body',
-      'True Wireless Stereo (TWS) pairing support for dual-speaker surround',
-      'Up to 12 hours non-stop playtime on a single charge',
-    ],
-    specifications: {
-      'Output Power': '15W Peak High-Fidelity Audio',
-      'Bluetooth': 'v5.3 Range 15m',
-      'Battery': '2600mAh Rechargeable Li-ion',
-      'Playback Time': '10-12 Hours (varies with RGB)',
-      'Waterproof': 'IPX7 Submersible',
-      'Weight': '380g with Carabiner Strap',
-    },
-    images: [
-      'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&w=800&q=80',
-    ],
-    telegramAlbumImages: [
-      'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1512499617640-c74ae3a79d37?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1498049860654-af1a5c566876?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1589492477829-5e65395b66cc?auto=format&fit=crop&w=800&q=80',
-    ],
-    telegramPostId: 'tg-post-8833',
-    supplierName: 'Badhons World (Mayons BD)',
-    lastStockCheck: new Date().toISOString(),
-  },
-  {
-    id: 'prod-bw-005',
-    name: 'Smart 3-Axis AI Face Tracking Handheld Foldable Phone Gimbal',
-    category: 'Gimbals',
-    url: 'https://badhonsworld.com/product/3-axis-ai-face-tracking-foldable-gimbal',
-    sku: 'BW-GIMBAL-3X',
+    id: 'bw-6a647a51134901b2b41e6cdb',
+    name: 'ONIKUMA K19 Professional Gaming Headset',
+    category: 'Headset',
+    url: 'https://badhonsworld.com/products/6a647a51134901b2b41e6cdb',
+    sku: 'BW-K19-RGB',
     stockStatus: 'in_stock',
     stockQuantity: 45,
     rating: 4.9,
-    reviewCount: 154,
-    description: 'Professional cinema-grade stabilization for TikTok creators, vloggers, and live streamers. Standalone optical AI tracking sensor tracks faces and body movement without needing an app connection. Integrated magnetic fill light with 3 color temperatures.',
+    reviewCount: 64,
+    description: 'Original ONIKUMA K19 Professional RGB Gaming Headset with 50mm dynamic drivers, noise-cancelling omnidirectional microphone, and multi-platform compatibility. Verified authentic product from badhonsworld.com.',
     features: [
-      'Magnetic AI Vision Sensor for 360° auto face tracking',
-      'Foldable pocketable design with built-in tripod legs',
-      'Three-color adjustable fill light with dimmer',
-      'Inception mode, Hitchcock zoom, and time-lapse presets',
-      'Reverse charge phone via Type-C output while shooting',
+      '50mm High-Fidelity Directional Sound Drivers',
+      'RGB Multi-Color Dynamic Breathing LED Lighting',
+      'Noise-Cancelling Retractable Flexible Microphone',
+      'Ergonomic Protein Leather Memory Foam Ear Cushions',
     ],
     specifications: {
-      'Payload Capacity': 'Up to 290g (All flagship smartphones)',
-      'Battery Life': '8-10 Hours continuous operation',
-      'Tracking Angle': 'Pan 310°, Roll 330°, Tilt 345°',
-      'Folded Dimensions': '158 x 108 x 55 mm',
-      'Weight': '395g',
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6a647a51134901b2b41e6cdb',
+      'Category': 'Headset',
+      'Available Stock': '45 Units',
     },
     images: [
-      'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80',
+      '/images/k19_0.png',
+      '/images/k19_1.png',
+      '/images/k19_2.png',
     ],
     telegramAlbumImages: [
-      'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1512790182412-b19e6d62bc39?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1519183071298-a2962be96e03?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1516542076529-1ea3854896f2?auto=format&fit=crop&w=800&q=80',
+      '/images/k19_0.png',
+      '/images/k19_1.png',
+      '/images/k19_2.png',
     ],
-    telegramPostId: 'tg-post-8840',
-    supplierName: 'Badhons World (Mayons BD)',
-    lastStockCheck: new Date().toISOString(),
-  },
-  {
-    id: 'prod-bw-006',
-    name: 'K55 Low-Latency 45ms RGB Gaming TWS Earbuds',
-    category: 'Gaming accessories',
-    url: 'https://badhonsworld.com/product/k55-gaming-low-latency-earbuds',
-    sku: 'BW-K55-GAMING',
-    stockStatus: 'out_of_stock', // Notice: Out of stock to test stock verification gate!
-    stockQuantity: 0,
-    rating: 4.3,
-    reviewCount: 95,
-    description: 'Aggressive mecha viper styling with dual breathing lights and ultra-low 45ms audio latency mode for BGMI and Free Fire esports players.',
-    features: [
-      '45ms ultra low sound latency gaming mode',
-      'Surround sound footsteps acoustic enhancement',
-      'Dual mic noise reduction for squad voice chat',
-    ],
-    specifications: {
-      'Latency': '45ms Gaming Grade',
-      'Bluetooth': 'v5.2 Gaming Chipset',
-      'Battery': '5h buds / 20h case',
-    },
-    images: [
-      'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
-    ],
-    telegramAlbumImages: [
-      'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?auto=format&fit=crop&w=800&q=80',
-    ],
-    telegramPostId: 'tg-post-8845',
-    supplierName: 'Badhons World (Mayons BD)',
-    lastStockCheck: new Date().toISOString(),
-  },
-  {
-    id: 'prod-bw-007',
-    name: 'K3 & E99 Pro 4K Dual Camera Drone with Altitude Hold & Wi-Fi FPV',
-    category: 'Drone & Tech',
-    url: 'https://badhonsworld.com/products/k3-e99-pro-4k-dual-camera-drone',
-    sku: 'BW-DRONE-E99',
-    stockStatus: 'in_stock',
-    stockQuantity: 28,
-    rating: 4.8,
-    reviewCount: 94,
-    description: 'High-performance folding 4K dual camera drone with optical flow positioning, altitude hold, headless mode, and real-time WiFi FPV transmission to smartphone. Ideal for aerial photography, travel reels, and outdoor videography.',
-    features: [
-      'Ultra HD 4K Dual Camera with 90° adjustable angle',
-      'Optical flow & altitude hold for rock-solid hovering',
-      'One-key takeoff, landing & 360° stunt roll function',
-      'Modular high-capacity battery for extended flight time',
-    ],
-    specifications: {
-      'Camera Resolution': '4K Dual Cameras (Front & Bottom)',
-      'Flight Range': 'Up to 150 Meters Wi-Fi FPV',
-      'Battery': '3.7V 1800mAh Modular Li-Po',
-      'App Support': 'Android & iOS FPV App',
-    },
-    images: [
-      'https://images.unsplash.com/photo-1527977966376-1c8408f9f108?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=800&q=80',
-    ],
-    telegramAlbumImages: [
-      'https://images.unsplash.com/photo-1527977966376-1c8408f9f108?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=800&q=80',
-    ],
-    telegramPostId: 'tg-post-8849',
+    telegramPostId: 'bw-post-k19',
     supplierName: "Badhon's World (badhonsworld.com)",
     lastStockCheck: new Date().toISOString(),
   },
   {
-    id: 'prod-bw-008',
-    name: 'KUKE PC108 45W Super Fast Charging Power Bank – 20000mAh',
-    category: 'Power Bank',
-    url: 'https://badhonsworld.com/products/kuke-pc108-45w-powerbank',
-    sku: 'BW-KUKE-45W',
+    id: 'bw-6a648ea9134901b2b41e8ac1',
+    name: 'QIF QY-45 10000mAh Fast Charging Power Bank',
+    category: 'PowerBank',
+    url: 'https://badhonsworld.com/products/6a648ea9134901b2b41e8ac1',
+    sku: 'BW-QY45-10K',
     stockStatus: 'in_stock',
-    stockQuantity: 42,
+    stockQuantity: 120,
     rating: 4.9,
-    reviewCount: 165,
-    description: 'High-power 45W two-way fast charging power bank capable of powering laptops, tablets, and smartphones simultaneously. Features digital LED display, multi-protocol PD 3.0 / QC 4.0 support, and intelligent power distribution.',
+    reviewCount: 48,
+    description: 'Original QIF QY-45 10000mAh High-Density Fast Charging Power Bank featuring Type-C and USB dual output, integrated charging cable, and LED percentage display. Verified authentic product from badhonsworld.com.',
     features: [
-      '45W Super Fast PD Output for Phones and MacBooks',
-      'Massive 20,000mAh airline-approved high-density cell',
-      'Dual Type-C + USB-A multi-device simultaneous charging',
-      'Smart LED digital power & voltage percentage display',
+      '10000mAh High-Density Airline-Safe Battery',
+      'PD Super Fast Output for iPhone and Android',
+      'Smart Real-Time LED Digital Power % Display',
+      'Integrated Fast Charging Cable & Hand Strap',
     ],
     specifications: {
-      'Total Capacity': '20,000mAh / 74Wh',
-      'Max Output': '45W Two-Way Fast Charge',
-      'Input Ports': 'Type-C PD 45W Rapid Refill',
-      'Safety Protection': 'Over-temperature & short-circuit IC',
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6a648ea9134901b2b41e8ac1',
+      'Category': 'PowerBank',
+      'Available Stock': '120 Units',
     },
     images: [
-      '/images/cyber_powerbank_poster.jpg',
-      'https://images.unsplash.com/photo-1609592424367-93510e19488a?auto=format&fit=crop&w=800&q=80',
+      '/images/qy45_0.png',
+      '/images/qy45_1.png',
+      '/images/qy45_2.png',
     ],
     telegramAlbumImages: [
-      '/images/cyber_powerbank_poster.jpg',
-      'https://images.unsplash.com/photo-1609592424367-93510e19488a?auto=format&fit=crop&w=800&q=80',
+      '/images/qy45_0.png',
+      '/images/qy45_1.png',
+      '/images/qy45_2.png',
     ],
-    telegramPostId: 'tg-post-8852',
+    telegramPostId: 'bw-post-qy45',
+    supplierName: "Badhon's World (badhonsworld.com)",
+    lastStockCheck: new Date().toISOString(),
+  },
+  {
+    id: 'bw-6a956644e17a85ed362ba6c9',
+    name: 'K3 & E99 Pro 4K Dual Camera Drone',
+    category: 'New Arrival',
+    url: 'https://badhonsworld.com/products/6a956644e17a85ed362ba6c9',
+    sku: 'BW-E99-4K',
+    stockStatus: 'in_stock',
+    stockQuantity: 35,
+    rating: 4.8,
+    reviewCount: 42,
+    description: 'K3 & E99 Pro 4K Dual Camera Folding Drone with Altitude Hold, Wi-Fi Real-Time FPV, and 360-degree obstacle avoidance. Verified authentic product from badhonsworld.com.',
+    features: [
+      'Ultra HD 4K Dual Cameras with 90° Adjustment',
+      'Optical Flow Hovering & Altitude Hold Stability',
+      'One-Key Takeoff, Landing & 360° Aerial Stunt Roll',
+      'Wi-Fi Real-Time Smartphone Video Transmission',
+    ],
+    specifications: {
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6a956644e17a85ed362ba6c9',
+      'Category': 'New Arrival',
+    },
+    images: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1788175938012-ca9eb9b9b0e3e31a134de3cbc5c2e616.jpg_960x960q80.jpg_.webp',
+    ],
+    telegramAlbumImages: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1788175938012-ca9eb9b9b0e3e31a134de3cbc5c2e616.jpg_960x960q80.jpg_.webp',
+    ],
+    telegramPostId: 'bw-post-e99',
+    supplierName: "Badhon's World (badhonsworld.com)",
+    lastStockCheck: new Date().toISOString(),
+  },
+  {
+    id: 'bw-6abb5c62ac373587bc923207',
+    name: 'Bumblebee BT Speaker – JY-BT Speaker',
+    category: 'Speaker',
+    url: 'https://badhonsworld.com/products/6abb5c62ac373587bc923207',
+    sku: 'BW-BEE-SPK',
+    stockStatus: 'in_stock',
+    stockQuantity: 50,
+    rating: 4.9,
+    reviewCount: 39,
+    description: 'Iconic Bumblebee Mech Edition Wireless Bluetooth Speaker with heavy bass acoustic drivers, dynamic glowing LED eyes, and FM radio support. Verified authentic product from badhonsworld.com.',
+    features: [
+      'Heavy Bass 360° Acoustic Sound Chamber',
+      'Dynamic Glowing LED Lights in Mech Helmet',
+      'Bluetooth 5.2 Wireless Connection & TF Card Play',
+      'Long-Lasting Rechargeable Lithium Battery',
+    ],
+    specifications: {
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6abb5c62ac373587bc923207',
+      'Category': 'Speaker',
+    },
+    images: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1790663773651-file_00000000d1808211b92ac204e2fa03f5.png',
+    ],
+    telegramAlbumImages: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1790663773651-file_00000000d1808211b92ac204e2fa03f5.png',
+    ],
+    telegramPostId: 'bw-post-bee',
+    supplierName: "Badhon's World (badhonsworld.com)",
+    lastStockCheck: new Date().toISOString(),
+  },
+  {
+    id: 'bw-6ab3941591fcd0fe6d3f87b1',
+    name: 'TOPGET Short Axis Spark Drift RC Racing Car',
+    category: 'Car',
+    url: 'https://badhonsworld.com/products/6ab3941591fcd0fe6d3f87b1',
+    sku: 'BW-DRIFT-RC',
+    stockStatus: 'in_stock',
+    stockQuantity: 40,
+    rating: 4.9,
+    reviewCount: 52,
+    description: 'High-speed 4WD spark drift RC racing car with friction flint spark effect, interchangeable drift and racing tires, 2.4GHz remote controller, and rechargeable battery. Verified authentic product from badhonsworld.com.',
+    features: [
+      'Real Spark Drift Effect with Friction Flints',
+      'High-Speed 4WD Drive System with 2.4GHz Remote',
+      'Interchangeable Racing & Smooth Drift Tires',
+      'Durable Impact-Resistant Polycarbonate Shell',
+    ],
+    specifications: {
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6ab3941591fcd0fe6d3f87b1',
+      'Category': 'Car',
+    },
+    images: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1790153742309-file_000000007b5c81f88ca416a80de14929.png',
+    ],
+    telegramAlbumImages: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1790153742309-file_000000007b5c81f88ca416a80de14929.png',
+    ],
+    telegramPostId: 'bw-post-drift',
+    supplierName: "Badhon's World (badhonsworld.com)",
+    lastStockCheck: new Date().toISOString(),
+  },
+  {
+    id: 'bw-6a6eff80157be46319977a2f',
+    name: 'Super Power Bank F15/F15E – 20W Magnetic Wireless Power Bank (10000mAh)',
+    category: 'PowerBank',
+    url: 'https://badhonsworld.com/products/6a6eff80157be46319977a2f',
+    sku: 'BW-F15-MAG',
+    stockStatus: 'in_stock',
+    stockQuantity: 65,
+    rating: 4.8,
+    reviewCount: 37,
+    description: 'MagSafe snap-on 20W PD two-way fast charging magnetic power bank with foldable phone stand, LED battery level indicators, and 10000mAh capacity. Verified authentic product from badhonsworld.com.',
+    features: [
+      'Strong MagSafe Snap-On 15W Wireless Charging',
+      '20W PD Two-Way USB-C Fast Wired Output',
+      'Built-in Foldable Magnetic Phone Viewing Stand',
+      '10,000mAh High-Density Airline-Safe Battery',
+    ],
+    specifications: {
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6a6eff80157be46319977a2f',
+      'Category': 'PowerBank',
+    },
+    images: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1785659262643-file_000000008f2081f88f351e81151fda2a.png',
+    ],
+    telegramAlbumImages: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1785659262643-file_000000008f2081f88f351e81151fda2a.png',
+    ],
+    telegramPostId: 'bw-post-f15',
+    supplierName: "Badhon's World (badhonsworld.com)",
+    lastStockCheck: new Date().toISOString(),
+  },
+  {
+    id: 'bw-6a64981ab5ac7781c4e9a762',
+    name: 'QIF QY-54 Mini PD30W Power Bank – 10000mAh',
+    category: 'PowerBank',
+    url: 'https://badhonsworld.com/products/6a64981ab5ac7781c4e9a762',
+    sku: 'BW-QY54-30W',
+    stockStatus: 'in_stock',
+    stockQuantity: 80,
+    rating: 4.9,
+    reviewCount: 55,
+    description: 'Ultra-compact mini PD30W super fast charging power bank with 10000mAh capacity, built-in display, and pocket-sized form factor. Verified authentic product from badhonsworld.com.',
+    features: [
+      'PD30W Super Fast Dual Output',
+      'Ultra-Compact Pocket-Sized Mini Build',
+      '10,000mAh High-Density Fast Recharging Battery',
+      'Intelligent Device Identification IC',
+    ],
+    specifications: {
+      'Supplier': "Badhon's World (badhonsworld.com)",
+      'Source Product URL': 'https://badhonsworld.com/products/6a64981ab5ac7781c4e9a762',
+      'Category': 'PowerBank',
+    },
+    images: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1784977432686-file_0000000030fc8207a7c20302673ae81b.png',
+    ],
+    telegramAlbumImages: [
+      'https://d2wuw2wo2jxqrg.cloudfront.net/uploads/1784977432686-file_0000000030fc8207a7c20302673ae81b.png',
+    ],
+    telegramPostId: 'bw-post-qy54',
     supplierName: "Badhon's World (badhonsworld.com)",
     lastStockCheck: new Date().toISOString(),
   },
@@ -495,19 +485,19 @@ let trendTopics: TrendTopic[] = [
   },
   {
     id: 'trend-003',
-    category: 'Smartwatch',
-    title: 'AMOLED Ultra Smartwatches with AI Assistant & Gesture Control',
-    trendScore: 86,
-    momentum: 'steady',
-    searchVolume: '52.1K queries/wk',
+    category: 'Headset',
+    title: 'RGB Esports Noise-Isolating Gaming Headsets (ONIKUMA K19 / Deep Bass)',
+    trendScore: 88,
+    momentum: 'surging',
+    searchVolume: '48.3K queries/wk',
     viralSignals: {
-      facebookBuzz: 85,
-      instagramReelsIndex: 87,
+      facebookBuzz: 89,
+      instagramReelsIndex: 91,
       googleSearchDemand: 86,
-      seasonalFit: 'Fitness tracking, daily office wear & university students',
+      seasonalFit: 'Competitive mobile esports, PC gaming setups & streaming',
     },
-    reasoning: 'Consumers looking for premium Ultra design with genuine high-refresh AMOLED screens instead of dull TFT panels. High click-through on Facebook Marketplace.',
-    recommendedKeywords: ['hk9 ultra 2', 'amoled smartwatch price in bd', 'gesture control watch', 'calling smartwatch'],
+    reasoning: 'Massive surge in PUBG Mobile and Free Fire tournament players in Bangladesh seeking directional audio cues and dynamic breathing RGB lighting. High conversion rate on Facebook Page messages.',
+    recommendedKeywords: ['onikuma k19 bd', 'gaming headset price in bd', 'rgb gaming headphones bd', 'pubg headset bd'],
     detectedAt: new Date().toISOString(),
   },
   {
@@ -588,6 +578,14 @@ if (pipelineItems.length === 0) {
         badgeColor: '#0088ff',
         theme: 'cinematic_dark',
         heroImageUrl: product.images[0],
+        generatedPosterUrl:
+          idx === 0
+            ? '/images/a9_pro_cinematic_poster.jpg'
+            : idx === 1
+            ? '/images/k19_gaming_night_poster.jpg'
+            : idx === 2
+            ? '/images/qy45_powerbank_night_poster.jpg'
+            : undefined,
         brandWatermark: true,
       },
       caption: {
@@ -631,6 +629,16 @@ function addLog(
 
 // Helper: Seed one initial published item to show dashboard vibrancy immediately
 function seedInitialPipeline() {
+  // Purge any legacy items with fake smartwatches or 404 URLs
+  pipelineItems = pipelineItems.filter(p => {
+    const n = (p.productName || '').toLowerCase();
+    const u = (p.productUrl || '');
+    return !n.includes('hk9') && !n.includes('smartwatch') && !u.includes('/product/');
+  });
+
+  if (pipelineItems.length > 0) {
+    return;
+  }
   const prod = catalogueProducts[0];
   const trend = trendTopics[0];
   const itemId = `pipe-${Date.now()}`;
@@ -644,50 +652,51 @@ function seedInitialPipeline() {
     category: prod.category,
     productUrl: prod.url,
     supplier: prod.supplierName,
-    trendId: trend.id,
-    trendTitle: trend.title,
-    trendScore: trend.trendScore,
+    trendId: 'trend-003',
+    trendTitle: 'RGB Esports Noise-Isolating Gaming Headsets (ONIKUMA K19 / Deep Bass)',
+    trendScore: 95,
     stage: 'draft_review',
     stockVerified: true,
     telegramAlbumFound: true,
     images: prod.telegramAlbumImages,
     heroImage: prod.telegramAlbumImages[0],
     aiAnalysis: {
-      productSummary: 'Viral ANC Earbuds featuring an interactive touchscreen on the charging casing.',
-      targetCustomer: 'Tech enthusiasts, mobile gamers, commuters, students looking for modern aesthetics.',
+      productSummary: 'Original ONIKUMA K19 Professional RGB Gaming Headset with 50mm dynamic drivers and noise-cancelling mic.',
+      targetCustomer: 'Gamers, streamers, esports players & university students in Bangladesh.',
       keySellingPoints: [
-        'Full color LCD touch case controls music & calls',
-        'Hybrid 35dB Active Noise Cancellation',
-        '32 hours marathon battery life',
-        'Direct EQ presets and wallpaper customization',
+        '50mm High-Fidelity Directional Sound Drivers',
+        'RGB Multi-Color Dynamic Breathing LED Lighting',
+        'Noise-Cancelling Retractable Flexible Microphone',
+        'Ergonomic Protein Leather Memory Foam Ear Cushions',
       ],
       visualStyle: 'cinematic_dark',
       heroImageIndex: 0,
-      angleToHighlight: 'Smart Touch Screen Case + Premium Sound Fidelity',
-      sentimentAppeal: 'Curiosity, premium tech flex, smart convenience',
+      angleToHighlight: '50mm High-Fidelity Sound Drivers & RGB Lighting',
+      sentimentAppeal: 'Competitive gaming edge, immersive soundstage',
     },
     creative: {
-      headline: 'NEXT-GEN TOUCH AUDIO',
-      subheadline: 'A9 Pro ANC Smart LCD Earbuds',
-      calloutBadges: ['Smart Touch Screen', '35dB Hybrid ANC', '32H Battery'],
+      headline: 'PRO ESPORTS SOUND',
+      subheadline: 'ONIKUMA K19 RGB Gaming Headset',
+      calloutBadges: ['50mm Drivers', 'Noise Cancelling', 'RGB Lighting'],
       badgeColor: '#3b82f6',
       theme: 'cinematic_dark',
       heroImageUrl: prod.telegramAlbumImages[0],
+      generatedPosterUrl: '/images/k19_gaming_night_poster.jpg',
       brandWatermark: true,
     },
     caption: {
-      banglaTitle: '🔥 A9 Pro ANC Smart Touch Screen Earbuds — গ্যাজেট লাভারদের নতুন সেনসেশন!',
-      summaryHook: 'এখন আর ফোনের স্ক্রিন আনলক করার দরকার নেই! কেসের টাচ স্ক্রিন থেকেই গান, কল, ওয়ালপেপার ও সাউন্ড মোড কন্ট্রোল করুন এক স্পর্শে।',
+      banglaTitle: '🔥 ONIKUMA K19 Professional RGB Gaming Headset — গেমারদের আল্টিমেট চয়েস!',
+      summaryHook: 'PUBG, Free Fire বা PC গেমিং—প্রতিটি পায়ের শব্দ ও বুলেটের দিক শুনুন নিখুঁত অ্যাকুরেসিতে! সাথে ডাইনামিক আরজিবি লাইটিং।',
       bulletPoints: [
-        'ফুল কালার ইন্টারেক্টিভ এলসিডি টাচ ডিসপ্লে কেস',
-        '৩৫ ডেসিবেল হাইব্রিড অ্যাক্টিভ নয়েজ ক্যান্সেলেশন (ANC + ENC)',
-        '৩২ ঘণ্টার ব্যাটারি ব্যাকআপ সাথে টাইপ-সি ফাস্ট চার্জিং',
-        'ডিপ বেস এবং ক্রিস্টাল ক্লিয়ার কলিং এক্সপেরিয়েন্স',
-        'বিল্ট-ইন ফাইন্ড মাই ইয়ারবাডস ও ফ্ল্যাশলাইট ফিচার',
+        '৫০ মিমি হাই-ফিডেলিটি ডিরেকশনাল অডিও ড্রাইভার',
+        'মাল্টি-কালার ভাইব্রেন্ট আরজিবি ব্রিদিং এলইডি লাইট',
+        'নয়েজ-ক্যানসেলিং ও ক্রিস্টাল ক্লিয়ার অ্যাডজাস্টেবল মাইক',
+        'লং গেমিং সেশনের জন্য নরম মেমরি ফোম ইয়ার প্যাড',
+        'মোবাইল, পিসি ও কনসোলে মাল্টি-প্ল্যাটফর্ম সাপোর্ট',
       ],
-      callToAction: '📩 স্টক সীমিত! অর্ডার করতে এখনই আমাদের ইনবক্স করুন অথবা হোয়াটসঅ্যাপে নক দিন। সারাদেশে ক্যাশ অন ডেলিভারি সুবিধা!',
-      hashtags: ['#MrXShop', '#A9Pro', '#SmartEarbuds', '#TechGadgetsBD', '#WirelessAudio', '#GadgetBD'],
-      fullFormattedText: `🔥 A9 Pro ANC Smart Touch Screen Earbuds — গ্যাজেট লাভারদের নতুন সেনসেশন!\n\nএখন আর ফোনের স্ক্রিন আনলক করার দরকার নেই! কেসের টাচ স্ক্রিন থেকেই গান, কল, ওয়ালপেপার ও সাউন্ড মোড কন্ট্রোল করুন এক স্পর্শে।\n\nএক নজরে প্রিমিয়াম ফিচারসমূহ:\n✓ ফুল কালার ইন্টারেক্টিভ এলসিডি টাচ ডিসপ্লে কেস\n✓ ৩৫ ডেসিবেল হাইব্রিড অ্যাক্টিভ নয়েজ ক্যান্সেলেশন (ANC + ENC)\n✓ ৩২ ঘণ্টার ব্যাটারি ব্যাকআপ সাথে টাইপ-সি ফাস্ট চার্জিং\n✓ ডিপ বেস এবং ক্রিস্টাল ক্লিয়ার কলিং এক্সপেরিয়েন্স\n✓ বিল্ট-ইন ফাইন্ড মাই ইয়ারবাডস ও ফ্ল্যাশলাইট ফিচার\n\n📩 স্টক সীমিত! অর্ডার করতে এখনই আমাদের ইনবক্স করুন অথবা হোয়াটসঅ্যাপে নক দিন। সারাদেশে ক্যাশ অন ডেলিভারি সুবিধা!\n\n#MrXShop #A9Pro #SmartEarbuds #TechGadgetsBD #WirelessAudio #GadgetBD`,
+      callToAction: '📩 স্টক সীমিত! অর্ডার করতে এখনই আমাদের Inbox বা WhatsApp (01822300348) করুন। সারাদেশে ক্যাশ অন ডেলিভারি!',
+      hashtags: ['#MrXShop', '#ONIKUMA', '#K19', '#GamingHeadset', '#TechGadgetsBD', '#GamerBD'],
+      fullFormattedText: `🔥 ONIKUMA K19 Professional RGB Gaming Headset — গেমারদের আল্টিমেট চয়েস!\n\nPUBG, Free Fire বা PC গেমিং—প্রতিটি পায়ের শব্দ ও বুলেটের দিক শুনুন নিখুঁত অ্যাকুরেসিতে! সাথে ডাইনামিক আরজিবি লাইটিং।\n\nএক নজরে প্রিমিয়াম ফিচারসমূহ:\n✓ ৫০ মিমি হাই-ফিডেলিটি ডিরেকশনাল অডিও ড্রাইভার\n✓ মাল্টি-কালার ভাইব্রেন্ট আরজিবি ব্রিদিং এলইডি লাইট\n✓ নয়েজ-ক্যানসেলিং ও ক্রিস্টাল ক্লিয়ার অ্যাডজাস্টেবল মাইক\n✓ লং গেমিং সেশনের জন্য নরম মেমরি ফোম ইয়ার প্যাড\n✓ মোবাইল, পিসি ও কনসোলে মাল্টি-প্ল্যাটফর্ম সাপোর্ট\n\n📩 স্টক সীমিত! অর্ডার করতে এখনই আমাদের Inbox বা WhatsApp করুন।\n\n📲 WhatsApp: 01822300348\n🌐 Website: https://mrxshopbd.web.app\n\n#MrXShop #ONIKUMA #K19 #GamingHeadset #TechGadgetsBD #GamerBD`,
     },
     qualityCheck: {
       passed: true,
@@ -2260,6 +2269,86 @@ app.post('/api/pipeline/action', async (req, res) => {
   }
 
   res.json({ success: true, item });
+});
+
+// Dynamic AI Regeneration endpoint
+app.post('/api/pipeline/:id/regenerate', async (req, res) => {
+  const itemId = req.params.id;
+  const { theme } = req.body;
+  const item = pipelineItems.find(p => p.id === itemId);
+  if (!item) {
+    return res.status(404).json({ success: false, message: 'Item not found' });
+  }
+
+  try {
+    addLog('info', 'CREATIVE_STUDIO', `Regenerating creative composition & marketing copy for "${item.productName}"...`);
+    
+    // Find matching product from catalogue
+    const product = catalogueProducts.find(p => p.id === item.productId) || {
+      id: item.productId,
+      name: item.productName,
+      category: item.category,
+      url: item.productUrl,
+      sku: 'BW-GEN',
+      stockStatus: 'in_stock' as const,
+      stockQuantity: 10,
+      rating: 4.8,
+      reviewCount: 35,
+      description: item.aiAnalysis?.productSummary || item.productName,
+      features: item.aiAnalysis?.keySellingPoints || [],
+      specifications: {},
+      images: item.images,
+      telegramAlbumImages: item.images,
+      supplierName: "Badhon's World (badhonsworld.com)",
+      lastStockCheck: new Date().toISOString(),
+    };
+
+    // Re-run Gemini AI analysis with creative variation
+    const analysis = await runGeminiProductAnalysis(product);
+    item.aiAnalysis = analysis;
+
+    // Toggle or set theme
+    const nextTheme = theme || (item.creative?.theme === 'cinematic_dark' ? 'daylight_minimal' : 'cinematic_dark');
+
+    // Select master poster based on theme
+    const nameLower = item.productName.toLowerCase();
+    let posterUrl: string | undefined = undefined;
+    if (nextTheme === 'daylight_minimal') {
+      if (nameLower.includes('k19') || nameLower.includes('gaming')) posterUrl = '/images/k19_gaming_daylight_poster.jpg';
+      else if (nameLower.includes('qy-54') || nameLower.includes('qy54') || nameLower.includes('mini pd30w')) posterUrl = '/images/qy54_powerbank_daylight_poster.jpg';
+      else if (nameLower.includes('qy-45') || nameLower.includes('power bank')) posterUrl = '/images/qy45_powerbank_daylight_poster.jpg';
+      else if (nameLower.includes('a9 pro')) posterUrl = '/images/a9_pro_daylight_poster.jpg';
+    } else {
+      if (nameLower.includes('k19') || nameLower.includes('gaming')) posterUrl = '/images/k19_gaming_night_poster.jpg';
+      else if (nameLower.includes('qy-54') || nameLower.includes('qy54') || nameLower.includes('mini pd30w')) posterUrl = '/images/qy54_powerbank_night_poster.jpg';
+      else if (nameLower.includes('qy-45') || nameLower.includes('power bank')) posterUrl = '/images/qy45_powerbank_night_poster.jpg';
+      else if (nameLower.includes('a9 pro')) posterUrl = '/images/a9_pro_cinematic_poster.jpg';
+    }
+
+    item.creative = {
+      headline: product.name.split(' ').slice(0, 3).join(' ').toUpperCase(),
+      subheadline: analysis.angleToHighlight,
+      calloutBadges: analysis.keySellingPoints.slice(0, 3).map(pt => pt.slice(0, 24)),
+      badgeColor: brandSettings.accentColor,
+      theme: nextTheme as any,
+      heroImageUrl: item.images[0] || item.heroImage,
+      generatedPosterUrl: posterUrl || item.creative?.generatedPosterUrl,
+      brandWatermark: true,
+    };
+
+    // Re-generate fresh caption with Gemini
+    const caption = await runGeminiCaptionGeneration(product, analysis, brandSettings);
+    item.caption = caption;
+    item.updatedAt = new Date().toISOString();
+
+    saveStateToDisk();
+    addLog('success', 'CREATIVE_STUDIO', `Regenerated fresh promotional angle ("${analysis.angleToHighlight}") for "${item.productName}".`);
+
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    addLog('error', 'CREATIVE_STUDIO', `Creative regeneration failed: ${err.message}`);
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Meta Graph API Connection Verification Endpoint

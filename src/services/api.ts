@@ -114,6 +114,22 @@ export const api = {
     return res.json();
   },
 
+  async regenerateCreative(
+    itemId: string,
+    theme?: string
+  ): Promise<{ success: boolean; item: PipelineItem }> {
+    const res = await fetch(`/api/pipeline/${encodeURIComponent(itemId)}/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to regenerate creative');
+    }
+    return res.json();
+  },
+
   async getBufferPool(): Promise<{
     reservePoolTotal: number;
     draftsAwaitingReview: number;
@@ -155,19 +171,6 @@ export const api = {
     const res = await fetch('/api/buffer-pool/test-fail-safe', {
       method: 'POST',
     });
-    return res.json();
-  },
-
-  async regenerateCreative(
-    itemId: string,
-    theme?: string
-  ): Promise<{ success: boolean; item: PipelineItem }> {
-    const res = await fetch('/api/pipeline/regenerate-creative', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemId, theme }),
-    });
-    if (!res.ok) throw new Error('Failed to regenerate creative');
     return res.json();
   },
 
